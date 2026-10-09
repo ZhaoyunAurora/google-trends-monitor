@@ -3,36 +3,20 @@
 GitHub Actions 按手工找词的方式自动跑（全部是**全球**数据）：
 词根 → 相关查询里的飙升词 → 每个飙升词和 GPTs 对比、看 12 个月 / 30 天 / 7 天曲线 → 再看这个词自己的飙升相关词 → 一层层往下挖（默认挖 3 层）。
 每个词被判成「新词 / 老词二次爆火 / 待观察 / 短时尖峰 / 老词」，结果直接提交回这个仓库。
-Claude 定时任务每天读结果，判断哪些词值得建站或加内页，写到 `reviews/`。全程免费。
+结果写到你的**私有仓库** `google-trends-data`，外人看不到；这个公开仓库只放代码，运行日志里也不打印关键词。
+Claude 定时任务每天北京时间 7:20、19:20 读私有仓库里的结果，判断哪些词值得建站或加内页，写回私有仓库的 `reviews/`，并推送到飞书群。
 
-## 每天看哪里
+## 设置
 
-| 文件 | 内容 |
-|---|---|
-| `reviews/YYYY-MM-DD.md` | Claude 的判断：建议做什么、SERP、域名、模型、评分 |
-| `reports/latest.md` | 当天的完整日报（GitHub 网页上直接打开就是表格） |
-| `data/latest.json` | 给 Claude 读的精简数据 |
-| `data/state.json`、`data/daily/` | 程序内部状态，不用管 |
+1. 新建**私有**仓库 `google-trends-data`（创建时勾选 Add a README）。
+2. 生成令牌：头像 → Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token
+   - Repository access 选 Only select repositories → `google-trends-data`
+   - Permissions → Repository permissions → **Contents: Read and write**
+3. 本仓库 → Settings → Secrets and variables → Actions → New repository secret：`DATA_REPO_TOKEN` = 上面的令牌。
+4. 飞书（可选）：在**两个仓库**都加 Secret `FEISHU_WEBHOOK`（开了签名校验再加 `FEISHU_SECRET`）。
+   本仓库的用来推每小时的新词提醒，私有仓库的用来推早晚的 Claude 判断。
 
-## 第一次设置（约 5 分钟）
-
-1. GitHub 新建仓库（建议 **Public**：公开仓库 Actions 不限时长，可以每小时跑 50 分钟；私有仓库每月只有 2000 免费分钟，一天只能跑一次，见下方）。
-2. 把这个文件夹里的所有文件上传到仓库根目录，**包括 `.github` 文件夹**（网页上传时直接把整个文件夹拖进去；如果看不到 `.github`，在电脑上打开"显示隐藏文件"）。
-3. 仓库 → Settings → Actions → General → 最下面 Workflow permissions 选 **Read and write permissions** → Save。（工作流文件里已经声明了写权限，一般不用改；如果第一次运行在"提交结果"那步报 403，就是这里没开。）
-4. 仓库 → Actions → 左边 trends-monitor → Run workflow，手动跑一次。跑完后仓库里会多出 `data/` 和 `reports/`。
-5. 之后它会按时间自动跑，不用管。
-
-### 私有仓库
-
-打开 `.github/workflows/trends.yml`，把
-`- cron: "7 * * * *"` 改成 `- cron: "7 13 * * *"`，`RUN_MINUTES` 的 `'50'` 改成 `'60'`（一天一次，每月约 1900 分钟）。
-代价是每天只能查约 1/20 的量，往下挖不了几层。
-
-## 推送到飞书群（可选）
-
-1. 飞书群 → 设置 → 群机器人 → 添加「自定义机器人」，复制 Webhook 地址（开了签名校验的话也复制密钥）。
-2. 仓库 → Settings → Secrets and variables → Actions → New repository secret：名字 `FEISHU_WEBHOOK`，值填 Webhook 地址；有密钥再加一个 `FEISHU_SECRET`。
-3. 之后有两种推送：每小时抓取时发现**第一次出现**的 AI / 工具类新词或老词二次爆火，马上推一条提醒（同一个词只推一次）；Claude 每天写完 `reviews/` 里的判断，也会推到群里。想测试：Actions → feishu-notify → Run workflow。
+没有 `DATA_REPO_TOKEN` 时工作流不会运行，结果不会写进公开仓库。
 
 ## 调整
 
@@ -41,7 +25,7 @@ Claude 定时任务每天读结果，判断哪些词值得建站或加内页，�
 | 加/删词根 | `config/roots.txt`：`[daily]` 每天必查，`[rotate]` 轮流查 |
 | 某类垃圾词总冒出来 | `config/filters.txt` 加一行 `原因 \| 正则` |
 | 有词被误杀 | `config/allow.txt` 写上这个词 |
-| 门槛 | `trends.yml` 里的 `CANDIDATE_MIN`（上升多少 % 才往下看，默认 300，「飙升」一律看） |
+| 门槛 | `.github/workflows/trends.yml` 里的 `CANDIDATE_MIN`（上升多少 % 才往下看，默认 300，「飙升」一律看） |
 | 挖几层 | `MAX_DEPTH`（默认 3） |
 | 跑得太慢 / 老被 429 | `REQUEST_INTERVAL` 调大（默认 25 秒一次请求） |
 

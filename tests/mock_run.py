@@ -93,4 +93,4 @@ if __name__ == "__main__":
     # 测试时只查两个词根
     run.rules.load_roots = lambda: (["higgsfield", "ai video"], [])
     run.Runner(client=FakeTrends()).run()
-    print((run.rules.ROOT_DIR / "reports" / "latest.md").read_text(encoding="utf-8"))
+    print((run.rules.OUT_DIR / "reports" / "latest.md").read_text(encoding="utf-8"))

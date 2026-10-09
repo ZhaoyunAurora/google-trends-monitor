@@ -1,9 +1,12 @@
 """读取词根、过滤规则、白名单；给词打方向标签。"""
+import os
 import re
 from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 CONFIG = ROOT_DIR / "config"
+# 结果写到哪里：GitHub Actions 里指向私有数据仓库的目录，本地默认写在代码目录
+OUT_DIR = Path(os.getenv("OUT_DIR") or ROOT_DIR).resolve()
 
 
 def _lines(name):

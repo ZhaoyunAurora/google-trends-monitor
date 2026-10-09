@@ -17,10 +17,10 @@ class RateLimited(Exception):
 
 
 class Trends:
-    def __init__(self, interval=25, max_consecutive_429=4, log=print):
+    def __init__(self, interval=25, max_consecutive_429=4, log=None):
         self.interval = interval
         self.max_429 = max_consecutive_429
-        self.log = log
+        self.log = log or (lambda msg, private=False: print(msg))
         self.requests = 0
         self.count_429 = 0
         self._consec_429 = 0
@@ -48,7 +48,7 @@ class Trends:
             try:
                 r = self.s.get(url, timeout=40)
             except requests.RequestException as e:
-                self.log(f"[net] {e}")
+                self.log(f"[net] {e}", private=True)
                 self._last = time.time()
                 continue
             self._last = time.time()
@@ -66,7 +66,7 @@ class Trends:
                 time.sleep(pause)
                 self._new_session()
                 continue
-            self.log(f"[http {r.status_code}] {url[:120]}")
+            self.log(f"[http {r.status_code}] {url[:120]}", private=True)
             return None
         return None
 

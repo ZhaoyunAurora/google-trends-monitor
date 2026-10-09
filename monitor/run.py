@@ -19,7 +19,7 @@ import time
 from . import classify, feishu, report, rules
 from .trends import RateLimited, Trends
 
-DATA = rules.ROOT_DIR / "data"
+DATA = rules.OUT_DIR / "data"
 REF = "gpts"  # 参照词，和手工对比时用的 GPTs 一致
 
 
@@ -42,7 +42,12 @@ def save_json(path, obj):
     path.write_text(json.dumps(obj, ensure_ascii=False, indent=1), encoding="utf-8")
 
 
-def log(msg):
+QUIET = os.getenv("QUIET") == "1"  # 公开仓库的运行日志谁都能看，带关键词的行不打印
+
+
+def log(msg, private=False):
+    if private and QUIET:
+        return
     print(f"{now():%H:%M:%S} {msg}", flush=True)
 
 
@@ -209,16 +214,16 @@ class Runner:
             done += 1
             if res["kind"] == "已过滤":
                 self.day["filtered"][kw] = res["filter"] + "（看相关词判断）"
-                log(f"[过滤] {kw}: {res['note']}")
+                log(f"[过滤] {kw}: {res['note']}", private=True)
                 continue
             log(f"[复核] {'  ' * (res['depth'] - 1)}{kw}: {res['kind']} {res.get('status', '')} "
-                f"GPTs×{res.get('gpts_ratio')}")
+                f"GPTs×{res.get('gpts_ratio')}", private=True)
             # 往下挖：看这个词自己的飙升相关词
             self.day["expanded"][kw] = children
             if res["depth"] < self.max_depth:
                 n = self.take_rising(kw, children, res["path"], res["depth"] + 1)
                 if n:
-                    log(f"        └ 往下一层：{n} 个新飙升词进队列")
+                    log(f"        └ 往下一层：{n} 个新飙升词进队列", private=True)
         return done
 
     # ---------- 主入口 ----------
@@ -244,6 +249,10 @@ class Runner:
             save_json(self.state_path, self.state)
             save_json(self.day_path, self.day)
             report.build(self.day, self.state)
+        kinds = {}
+        for r in self.state["reviewed"].values():
+            kinds[r.get("kind")] = kinds.get(r.get("kind"), 0) + 1
+        log(f"累计复核结果：{kinds}")
         log(f"完成：请求 {self.client.requests} 次，429 {self.client.count_429} 次，队列剩 {len(self.state['pending'])}")
 
     def cleanup(self):

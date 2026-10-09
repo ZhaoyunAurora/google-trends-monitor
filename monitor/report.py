@@ -5,8 +5,8 @@ from collections import defaultdict
 
 from . import rules
 
-REPORTS = rules.ROOT_DIR / "reports"
-DATA = rules.ROOT_DIR / "data"
+REPORTS = rules.OUT_DIR / "reports"
+DATA = rules.OUT_DIR / "data"
 
 ORDER = ["新词", "老词二次爆火", "待观察", "短时尖峰"]
 STATUS_RANK = {"上升中": 0, "高位": 1, "回落中": 2, "已明显回落": 3, "": 4}
