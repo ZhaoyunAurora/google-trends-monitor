@@ -21,8 +21,9 @@ def send(text):
         msg.update(timestamp=ts, sign=sign)
     req = urllib.request.Request(hook, data=json.dumps(msg).encode(), headers={"Content-Type": "application/json"})
     try:
-        print("[飞书]", urllib.request.urlopen(req, timeout=20).read().decode()[:200])
-        return True
+        resp = urllib.request.urlopen(req, timeout=20).read().decode()
+        print("[飞书]", resp[:200])
+        return json.loads(resp).get("code", 0) == 0
     except Exception as e:  # 推送失败不影响抓取
         print("[飞书] 推送失败:", e)
         return False

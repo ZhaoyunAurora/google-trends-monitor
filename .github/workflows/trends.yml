@@ -14,6 +14,10 @@ on:
       minutes:
         description: "本次最多跑几分钟"
         default: "50"
+      test_feishu:
+        description: "只发一条飞书测试消息，不抓取"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -55,8 +59,14 @@ jobs:
           python-version: "3.12"
       - if: steps.check.outputs.ok == 'true'
         run: pip install requests
+      - name: 飞书测试
+        if: github.event.inputs.test_feishu == 'true'
+        run: python -c "from monitor import feishu; import sys; sys.exit(0 if feishu.send('【测试】Trends 新词提醒的飞书推送已连通，之后每小时有新词会推送到这里。') else 1)"
+        env:
+          FEISHU_WEBHOOK: ${{ secrets.FEISHU_WEBHOOK }}
+          FEISHU_SECRET: ${{ secrets.FEISHU_SECRET }}
       - name: 抓取并复核
-        if: steps.check.outputs.ok == 'true'
+        if: steps.check.outputs.ok == 'true' && github.event.inputs.test_feishu != 'true'
         run: python -m monitor.run
         env:
           OUT_DIR: store
@@ -70,7 +80,7 @@ jobs:
           FEISHU_WEBHOOK: ${{ secrets.FEISHU_WEBHOOK }}
           FEISHU_SECRET: ${{ secrets.FEISHU_SECRET }}
       - name: 结果提交到私有仓库
-        if: always() && steps.check.outputs.ok == 'true'
+        if: always() && steps.check.outputs.ok == 'true' && github.event.inputs.test_feishu != 'true'
         working-directory: store
         run: |
           git config user.name "trends-bot"
