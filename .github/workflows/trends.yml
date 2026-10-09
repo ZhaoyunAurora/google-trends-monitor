@@ -1,0 +1,49 @@
+name: trends-monitor
+
+on:
+  schedule:
+    # GitHub 的定时用 UTC 时间。默认每小时跑一次、每次 50 分钟（适合公开仓库，运行时间不限）。
+    # 往下挖词很费请求（Google 限速约 25 秒一次），所以尽量多跑。
+    # 私有仓库（每月免费 2000 分钟）：改成一天一次 - cron: "7 13 * * *"，并把下面 RUN_MINUTES 的 '50' 改成 '60'
+    - cron: "7 * * * *"
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: "本次最多跑几分钟"
+        default: "50"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: trends-monitor
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests
+      - name: 抓取并复核
+        run: python -m monitor.run
+        env:
+          RUN_MINUTES: ${{ github.event.inputs.minutes || '50' }}
+          REQUEST_INTERVAL: "25"
+          CANDIDATE_MIN: "300"
+          ROTATE_PER_RUN: "10"
+          MAX_DEPTH: "3"
+          ROOT_SHARE: "0.35"
+      - name: 提交结果到仓库
+        if: always()
+        run: |
+          git config user.name "trends-bot"
+          git config user.email "trends-bot@users.noreply.github.com"
+          git add data reports
+          git diff --cached --quiet && exit 0
+          git commit -m "data: $(date -u +%F-%H%M)"
+          for i in 1 2 3; do git pull --rebase && git push && break; sleep 5; done

@@ -1,0 +1,14 @@
+# 过滤规则：原因 | 正则（不区分大小写）
+# 命中任意一条就不进复核，日报里会列在「已过滤」。误杀的词写进 allow.txt。
+# 非英文、问句长句、网址、算式这几类写在代码里，不用在这里配。
+
+新闻时事 | \b(lawsuit|legal action|sues?|sued|ipo|merger|acquisition|stock|shares|earnings|valuation|layoffs?|allegations?|arrested|charged|verdict|court|leaks?|breach|hack(ed|ing)?|outage|security update|execution|died|dies|death|obituary|recall|election|senate|tariff|report|disclosure|terminated|pauses?)\b
+报错故障 | \b(down|not working|server status|status|error|missing content|unable to|login|log in|sign in)\b
+体育赛事 | \b(vs\.?|score|scores|standings|depth chart|injury|game today|game tonight|match|playoffs?|bracket|medal tally|grand prix|nfl|nba|mlb|nhl|wnba|ufc|f1|fifa|uefa|premier league|world cup|asian games|olympics?|marathon|cricket|ipl)\b
+优惠导航 | \b(near me|promo code|coupon|discount|price in india|tickets?|showtimes|box office|collection)\b
+盗版破解 | \b(apk|mod apk|crack|cracked|torrent|free download|dailymotion|unblocked|hack|cheats?|script|executor)\b
+影视娱乐 | \b(release date|episode|season \d+|trailer|cast|lyrics|movie|film|ott|netflix|anime episode|manhwa|chapter \d+)\b
+成人内容 | \b(nsfw|porn|nude|naked|sex|hentai|boob|onlyfans|r18|18\+|uncensored|spicy)\b
+天气灾害 | \b(hurricane|cyclone|typhoon|storm tracker|weather|earthquake|tornado|wildfire)\b
+谜题答案 | \b(wordle|crossword|crossword clue|clue|nyt mini|connections hint|strands|answer today|answers today)\b
+刷量垃圾 | \b(review|comparison|essentials|setup|for beginners|best laptop|tourist attractions|how to bake|how to make sushi|best pizza|cheapest flights|best time to visit)\b

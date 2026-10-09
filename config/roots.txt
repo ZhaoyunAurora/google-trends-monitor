@@ -1,0 +1,245 @@
+# 词根配置
+# [daily] 段：每天都查（AI 视频/图片方向的核心词根，变化最快）
+# [rotate] 段：轮流查，每次运行查 ROTATE_PER_RUN 个，按上次查询时间从早到晚
+# 每个词根大约消耗 2 次请求。想加词根直接加一行；以 # 开头的行会被忽略。
+
+[daily]
+ai video
+ai image
+ai photo
+image to video
+ai filter
+ai trend
+ai song
+ai dance
+ai avatar
+ai photo editor
+seedance
+kling
+veo
+higgsfield
+viggle
+hailuo
+pixverse
+nano banana
+qwen image
+gpt image
+sora
+midjourney
+grok imagine
+dreamina
+hedra
+vidu
+krea ai
+suno
+
+[rotate]
+# --- AI 方向补充 ---
+ai video generator
+ai image generator
+ai music
+ai voice
+ai headshot
+ai face swap
+ai prompt
+ai art
+ai anime
+ai cartoon
+ai baby generator
+ai hug
+ai kiss
+ai portrait
+ai sticker
+ai coloring page
+ai tattoo
+ai hairstyle
+ai interior design
+ai logo
+text to video
+text to image
+image to image
+ai upscaler
+ai background remover
+elevenlabs
+meta ai
+gemini
+openai
+claude
+deepseek
+minimax
+wan ai
+runway ai
+pika ai
+luma ai
+flux ai
+seedream
+heygen
+magic hour
+pollo ai
+openart
+capcut
+# --- 你原来的词根 ---
+calculator
+generator
+art
+assistant
+analyzer
+builder
+cataloger
+checker
+comparator
+compiler
+connector
+constructor
+convert
+converter
+creator
+dashboard
+designer
+detector
+downloader
+editor
+evaluator
+example
+explorer
+extractor
+faq
+format
+guide
+interpreter
+maker
+manager
+monitor
+navigator
+notifier
+online
+optimizer
+pattern
+planner
+processor
+recommend
+restorer
+receiver
+recorder
+responder
+simulator
+sample
+scheduler
+scheme
+scraper
+sender
+syncer
+text
+template
+tracker
+translator
+uploader
+verifier
+viewer
+action
+advisor
+agent
+ai
+anime
+answer
+audio
+avatar
+best
+cartoon
+changer
+character
+chart
+chat
+cheat
+clue
+code
+coloring page
+composer
+corrector
+crawler
+diagram
+directory
+emoji
+enhancer
+face
+figure
+filter
+finder
+fixer
+font
+graph
+helper
+hint
+how to
+humanizer
+icon
+ideas
+illustration
+image
+interior design
+layout
+list
+logo
+manipulator
+meme
+model
+modifier
+music
+paraphaser
+photo
+picture
+portal
+portrait
+product photo
+resources
+review
+solver
+song
+sound
+speech
+starter
+studio
+style
+summarizer
+summary
+tattoo
+tester
+tool
+top
+transcriber
+upscaler
+video
+voice
+writer
+game
+unblocked
+runner
+hack
+mod
+skin
+roblox
+minecraft
+fortnite
+pokemon
+wordle
+crossword
+scrabble
+tetris
+chess
+sudoku
+play
+download
+free
+multiplayer
+battle
+tycoon
+obby
+parkour
+funny
+instagram
+signature
+color
+colour
+kaomoji
+film
+movie
