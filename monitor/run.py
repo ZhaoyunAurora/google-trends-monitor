@@ -92,8 +92,20 @@ class Runner:
                 c["formatted"] = it["formatted"]
             if not self.fresh(kw) and kw not in self.state["pending"]:
                 self.state["pending"][kw] = {"roots": c["roots"], "value": c["value"],
-                                             "path": c["path"], "depth": c["depth"]}
+                                             "path": c["path"], "depth": c["depth"],
+                                             "variant": self.is_variant(kw, parent)}
         return hits
+
+    def is_variant(self, kw, parent):
+        """同一个词换个说法（chuttamalle ai video → chuttamalle song ai version video），排到后面再查，
+        省下请求先去查真正不同的词。"""
+        words = set(kw.split())
+        known = [parent] + list(self.state["reviewed"]) + list(self.state["pending"])
+        for k in known:
+            kw_set = set(k.split())
+            if k != kw and k not in self.root_set and len(kw_set) >= 2 and (kw_set <= words or words <= kw_set):
+                return True
+        return False
 
     # ---------- 阶段 1：查词根 ----------
     def pick_roots(self):
@@ -168,7 +180,7 @@ class Runner:
         def key(kv):
             kw, meta = kv
             ai = 0 if rules.AI_WORDS.search(kw) or rules.AI_WORDS.search(" ".join(meta.get("path", []))) else 1
-            return (ai, meta.get("depth", 1), -meta.get("value", 0))
+            return (ai, 1 if meta.get("variant") else 0, meta.get("depth", 1), -meta.get("value", 0))
         return sorted(((k, m) for k, m in self.state["pending"].items() if k not in self.skip), key=key)
 
     def review_pending(self):
