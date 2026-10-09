@@ -61,6 +61,8 @@ class Runner:
         self.rotate_n = int(os.getenv("ROTATE_PER_RUN", "15"))
         self.client = client or Trends(interval=float(os.getenv("REQUEST_INTERVAL", "25")), log=log)
         self.deadline = time.time() + self.minutes * 60 - 90
+        if hasattr(self.client, "deadline"):
+            self.client.deadline = self.deadline
         self.state_path = DATA / "state.json"
         self.state = load_json(self.state_path, {"roots": {}, "reviewed": {}, "pending": {}})
         self.day_path = DATA / "daily" / f"{today()}.json"

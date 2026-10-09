@@ -25,6 +25,9 @@ class Trends:
         self.count_429 = 0
         self._consec_429 = 0
         self._last = 0.0
+        self.deadline = None      # 由 Runner 设置；冷却等待不会超过这个时间
+        self.cooldowns = 0
+        self.max_cooldowns = 3
         self.s = None
         self._new_session()
 
@@ -60,7 +63,17 @@ class Trends:
                 self.count_429 += 1
                 self._consec_429 += 1
                 if self._consec_429 >= self.max_429:
-                    raise RateLimited()
+                    # 连续被限速：歇 4~5 分钟、换新会话再试，最多 3 次；时间不够就收工
+                    pause = 240 + random.uniform(0, 60)
+                    if self.cooldowns >= self.max_cooldowns or (
+                            self.deadline and time.time() + pause > self.deadline):
+                        raise RateLimited()
+                    self.cooldowns += 1
+                    self.log(f"[429] 连续被限速，冷却 {pause:.0f}s（第 {self.cooldowns} 次）")
+                    time.sleep(pause)
+                    self._new_session()
+                    self._consec_429 = 0
+                    continue
                 pause = 60 * (attempt + 1) + random.uniform(0, 20)
                 self.log(f"[429] 等 {pause:.0f}s 后重试")
                 time.sleep(pause)
