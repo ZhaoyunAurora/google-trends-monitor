@@ -7,13 +7,14 @@ name: trends-monitor
 #   FEISHU_SECRET    飞书机器人签名密钥（可选）
 on:
   schedule:
-    # UTC 时间。每小时跑一次、每次 50 分钟（公开仓库运行时间不限）。
-    - cron: "7 * * * *"
+    # 每 15 分钟跑一次、每次约 12 分钟。Google 会对单个 IP 限速，每次运行换一台机器（新 IP），
+    # 短跑多次比一次跑很久查得多。
+    - cron: "*/15 * * * *"
   workflow_dispatch:
     inputs:
       minutes:
         description: "本次最多跑几分钟"
-        default: "50"
+        default: "12"
       test_feishu:
         description: "只发一条飞书测试消息，不抓取"
         type: boolean
@@ -32,7 +33,7 @@ env:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 70
+    timeout-minutes: 25
     steps:
       - name: 检查令牌
         id: check
@@ -71,10 +72,11 @@ jobs:
         env:
           OUT_DIR: store
           QUIET: "1"
-          RUN_MINUTES: ${{ github.event.inputs.minutes || '50' }}
+          RUN_MINUTES: ${{ github.event.inputs.minutes || '12' }}
           REQUEST_INTERVAL: "25"
           CANDIDATE_MIN: "300"
-          ROTATE_PER_RUN: "10"
+          ROTATE_PER_RUN: "5"
+          ROTATE_DAYS: "3"
           MAX_DEPTH: "3"
           ROOT_SHARE: "0.35"
           FEISHU_WEBHOOK: ${{ secrets.FEISHU_WEBHOOK }}

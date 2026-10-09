@@ -10,6 +10,7 @@
   ROOT_SHARE        每次运行用多少比例的时间查词根，剩下的往下挖（默认 0.35）
   REVIEW_TTL_DAYS   查过的词几天内不重复查（默认 3）
   ROTATE_PER_RUN    每次运行最多查几个轮换词根（默认 15）
+  ROTATE_DAYS       轮换词根隔几天查一次（默认 3）
 """
 import datetime as dt
 import json
@@ -70,6 +71,8 @@ class Runner:
                                              "filtered": {}, "runs": []})
         self.day.setdefault("expanded", {})
         self.root_set = set()
+        self.root_words = set()
+        self.rotate_days = int(os.getenv("ROTATE_DAYS", "3"))
         self.skip = set()  # 本次运行请求失败的词，下次再试
 
     # ---------- 收集飙升词 ----------
@@ -99,29 +102,37 @@ class Runner:
                 c["formatted"] = it["formatted"]
             if not self.fresh(kw) and kw not in self.state["pending"]:
                 self.state["pending"][kw] = {"roots": c["roots"], "value": c["value"],
-                                             "path": c["path"], "depth": c["depth"],
-                                             "variant": self.is_variant(kw, parent)}
+                                             "path": c["path"], "depth": c["depth"]}
         return hits
 
-    def is_variant(self, kw, parent):
-        """同一个词换个说法（chuttamalle ai video → chuttamalle song ai version video），排到后面再查，
-        省下请求先去查真正不同的词。"""
-        words = set(kw.split())
-        known = [parent] + list(self.state["reviewed"]) + list(self.state["pending"])
-        for k in known:
-            kw_set = set(k.split())
-            if k != kw and k not in self.root_set and len(kw_set) >= 2 and (kw_set <= words or words <= kw_set):
-                return True
-        return False
+    GENERIC = set("""ai video videos image images photo photos pic picture song songs music version app apps free online
+        generator maker editor tool tools new trend trends prompt prompts the a an of to for and in on with how what is
+        download edit edits effect effects filter style art create make model v1 v2 v3 2 3 pro vs""".split())
+
+    def core_words(self, kw):
+        """去掉通用词和词根里的词，剩下真正区分这个词的部分。"""
+        return {w for w in kw.split() if w not in self.GENERIC and w not in self.root_words and len(w) > 2}
+
+    def family_words(self):
+        """最近复核过的词的核心词。新词和它们有交集，就算同一个话题的变体，排到后面。"""
+        words = set()
+        cutoff = (now() - dt.timedelta(days=2)).isoformat()
+        for k, r in self.state["reviewed"].items():
+            if r.get("reviewed_at", "") >= cutoff:
+                words |= self.core_words(k)
+        return words
 
     # ---------- 阶段 1：查词根 ----------
     def pick_roots(self):
         daily, rotate = rules.load_roots()
         self.root_set = set(daily) | set(rotate)
+        self.root_words = {w for r in self.root_set for w in r.split()}
         last = self.state["roots"]
         todo = [r for r in daily if not last.get(r, "").startswith(today())]
+        # 轮换词根每隔 ROTATE_DAYS 天查一次，把请求省给往下挖
+        cutoff = (now() - dt.timedelta(days=self.rotate_days)).isoformat()
         rotate_sorted = sorted(rotate, key=lambda r: last.get(r, ""))
-        todo += [r for r in rotate_sorted if not last.get(r, "").startswith(today())][: self.rotate_n]
+        todo += [r for r in rotate_sorted if last.get(r, "") < cutoff][: self.rotate_n]
         return todo
 
     def scan_roots(self, budget_until):
@@ -184,10 +195,15 @@ class Runner:
         return res, children
 
     def queue_order(self):
+        family = self.family_words()
+
         def key(kv):
             kw, meta = kv
-            ai = 0 if rules.AI_WORDS.search(kw) or rules.AI_WORDS.search(" ".join(meta.get("path", []))) else 1
-            return (ai, 1 if meta.get("variant") else 0, meta.get("depth", 1), -meta.get("value", 0))
+            # 词本身带 AI 字样最优先，其次是工具类需求，再其次是从 AI 词根挖出来的
+            ai = (0 if rules.AI_WORDS.search(kw) else 1 if rules.TOOL_WORDS.search(kw)
+                  else 2 if rules.AI_WORDS.search(" ".join(meta.get("path", []))) else 3)
+            variant = 1 if self.core_words(kw) & family else 0
+            return (ai, variant, meta.get("depth", 1), -meta.get("value", 0))
         return sorted(((k, m) for k, m in self.state["pending"].items() if k not in self.skip), key=key)
 
     def review_pending(self):

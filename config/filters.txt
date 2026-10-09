@@ -4,7 +4,7 @@
 
 新闻时事 | \b(lawsuit|legal action|sues?|sued|ipo|merger|acquisition|stock|shares|earnings|valuation|layoffs?|allegations?|arrested|charged|verdict|court|leaks?|breach|hack(ed|ing)?|outage|security update|execution|died|dies|death|obituary|recall|election|senate|tariff|report|disclosure|terminated|pauses?)\b
 报错故障 | \b(down|not working|server status|status|error|missing content|unable to|login|log in|sign in)\b
-体育赛事 | \b(vs\.?|score|scores|standings|depth chart|injury|game today|game tonight|match|playoffs?|bracket|medal tally|grand prix|nfl|nba|mlb|nhl|wnba|ufc|f1|fifa|uefa|premier league|world cup|asian games|olympics?|marathon|cricket|ipl)\b
+体育赛事 | \b(score|scores|standings|depth chart|injury|game today|game tonight|match|playoffs?|bracket|medal tally|grand prix|nfl|nba|mlb|nhl|wnba|ufc|f1|fifa|uefa|premier league|world cup|asian games|olympics?|marathon|cricket|ipl)\b
 优惠导航 | \b(near me|promo code|coupon|discount|price in india|tickets?|showtimes|box office|collection)\b
 盗版破解 | \b(apk|mod apk|crack|cracked|torrent|free download|dailymotion|unblocked|hack|cheats?|script|executor)\b
 影视娱乐 | \b(release date|episode|season \d+|trailer|cast|lyrics|movie|film|ott|netflix|anime episode|manhwa|chapter \d+)\b
