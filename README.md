@@ -28,6 +28,12 @@ Claude 定时任务每天读结果，判断哪些词值得建站或加内页，�
 `- cron: "7 * * * *"` 改成 `- cron: "7 13 * * *"`，`RUN_MINUTES` 的 `'50'` 改成 `'60'`（一天一次，每月约 1900 分钟）。
 代价是每天只能查约 1/20 的量，往下挖不了几层。
 
+## 推送到飞书群（可选）
+
+1. 飞书群 → 设置 → 群机器人 → 添加「自定义机器人」，复制 Webhook 地址（开了签名校验的话也复制密钥）。
+2. 仓库 → Settings → Secrets and variables → Actions → New repository secret：名字 `FEISHU_WEBHOOK`，值填 Webhook 地址；有密钥再加一个 `FEISHU_SECRET`。
+3. 之后 Claude 每天写完 `reviews/` 里的判断，会自动推到群里。想测试：Actions → feishu-notify → Run workflow。
+
 ## 调整
 
 | 想做的事 | 改哪里 |
