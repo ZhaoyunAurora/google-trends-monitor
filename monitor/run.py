@@ -16,7 +16,7 @@ import json
 import os
 import time
 
-from . import classify, report, rules
+from . import classify, feishu, report, rules
 from .trends import RateLimited, Trends
 
 DATA = rules.ROOT_DIR / "data"
@@ -233,6 +233,7 @@ class Runner:
             log(stopped)
         finally:
             self.cleanup()
+            feishu.alert_new(self.state)
             self.day["runs"].append({
                 "at": now().isoformat(timespec="minutes"),
                 "requests": self.client.requests,
@@ -250,6 +251,7 @@ class Runner:
         cutoff = (now().date() - dt.timedelta(days=30)).isoformat()
         self.state["reviewed"] = {k: v for k, v in self.state["reviewed"].items()
                                   if v.get("reviewed_at", "") >= cutoff}
+        self.state["notified"] = {k: v for k, v in self.state.get("notified", {}).items() if v >= cutoff}
         pend = self.state["pending"]
         if len(pend) > 600:
             keep = dict(self.queue_order()[:600])

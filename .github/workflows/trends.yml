@@ -38,6 +38,8 @@ jobs:
           ROTATE_PER_RUN: "10"
           MAX_DEPTH: "3"
           ROOT_SHARE: "0.35"
+          FEISHU_WEBHOOK: ${{ secrets.FEISHU_WEBHOOK }}
+          FEISHU_SECRET: ${{ secrets.FEISHU_SECRET }}
       - name: 提交结果到仓库
         if: always()
         run: |

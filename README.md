@@ -32,7 +32,7 @@ Claude 定时任务每天读结果，判断哪些词值得建站或加内页，�
 
 1. 飞书群 → 设置 → 群机器人 → 添加「自定义机器人」，复制 Webhook 地址（开了签名校验的话也复制密钥）。
 2. 仓库 → Settings → Secrets and variables → Actions → New repository secret：名字 `FEISHU_WEBHOOK`，值填 Webhook 地址；有密钥再加一个 `FEISHU_SECRET`。
-3. 之后 Claude 每天写完 `reviews/` 里的判断，会自动推到群里。想测试：Actions → feishu-notify → Run workflow。
+3. 之后有两种推送：每小时抓取时发现**第一次出现**的 AI / 工具类新词或老词二次爆火，马上推一条提醒（同一个词只推一次）；Claude 每天写完 `reviews/` 里的判断，也会推到群里。想测试：Actions → feishu-notify → Run workflow。
 
 ## 调整
 
