@@ -18,6 +18,12 @@ Claude 定时任务每天北京时间 7:20、19:20 读私有仓库里的结果�
 
 没有 `DATA_REPO_TOKEN` 时工作流不会运行，结果不会写进公开仓库。
 
+## 运行方式
+
+GitHub 的定时触发很不准，所以工作流是「接力」跑的：每次跑约 12 分钟，结束时自己触发下一次（每次换一台机器，减少 Google 限速）。
+定时（每 30 分钟）只是保险，接力断了会重新接上。
+想暂停：仓库 Settings → Secrets and variables → Actions → Variables 新建变量 `CHAIN` = `off`（删掉变量即恢复）；或者在 Actions 页面直接 Disable workflow。
+
 ## 调整
 
 | 想做的事 | 改哪里 |

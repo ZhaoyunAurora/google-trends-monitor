@@ -7,9 +7,9 @@ name: trends-monitor
 #   FEISHU_SECRET    飞书机器人签名密钥（可选）
 on:
   schedule:
-    # 每 15 分钟跑一次、每次约 12 分钟。Google 会对单个 IP 限速，每次运行换一台机器（新 IP），
-    # 短跑多次比一次跑很久查得多。
-    - cron: "*/15 * * * *"
+    # GitHub 的定时触发很不准（实际几个小时才触发一次），所以改成「接力」：
+    # 每次跑完约 12 分钟后自己触发下一次（换一台机器、新 IP）。这里的定时只当保险，接力断了会重新接上。
+    - cron: "*/30 * * * *"
   workflow_dispatch:
     inputs:
       minutes:
@@ -22,6 +22,7 @@ on:
 
 permissions:
   contents: read
+  actions: write   # 用来触发下一次接力
 
 concurrency:
   group: trends-monitor
@@ -67,6 +68,7 @@ jobs:
           FEISHU_WEBHOOK: ${{ secrets.FEISHU_WEBHOOK }}
           FEISHU_SECRET: ${{ secrets.FEISHU_SECRET }}
       - name: 抓取并复核
+        id: scrape
         if: steps.check.outputs.ok == 'true' && github.event.inputs.test_feishu != 'true'
         run: python -m monitor.run
         env:
@@ -91,3 +93,18 @@ jobs:
           git diff --cached --quiet && exit 0
           git commit -q -m "data: $(date -u +%F-%H%M)"
           for i in 1 2 3; do git pull -q --rebase && git push -q && break; sleep 5; done
+      - name: 接力：触发下一次运行
+        # 只有抓取成功才接力，避免程序出错时无限快速重跑
+        if: always() && steps.scrape.outcome == 'success' && vars.CHAIN != 'off'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # 已经有排队中的就不重复触发
+          queued=$(gh run list -R "$GITHUB_REPOSITORY" -w trends.yml -s queued --json databaseId -q 'length')
+          pending=$(gh run list -R "$GITHUB_REPOSITORY" -w trends.yml -s pending --json databaseId -q 'length')
+          if [ "$queued" = "0" ] && [ "$pending" = "0" ]; then
+            gh workflow run trends.yml -R "$GITHUB_REPOSITORY" --ref main
+            echo "已触发下一次"
+          else
+            echo "已有排队中的运行，跳过"
+          fi
