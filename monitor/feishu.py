@@ -29,7 +29,7 @@ def send(text):
         return False
 
 
-# 新词汇总：每 6 小时（北京时间 2、8、14、20 点之后的第一次运行）把这段时间的新词合并成一条推送。
+# 新词汇总：每 6 小时（北京时间 1、7、13、19 点之后的第一次运行）把这段时间的新词合并成一条推送。
 # 平时只存结果，不打扰。
 import datetime as _dt
 
@@ -39,7 +39,7 @@ PUSH_MIN_EARLY = int(os.getenv("PUSH_MIN_EARLY", "100"))  # 今天刚冒头的�
 ALERT_TAGS = {"AI 视频/图片", "AI 工具", "工具站", "小游戏", "AI 相关（词根）",
               "AI 工具/模型/玩法", "工具站需求"}  # 后两个是旧版标签
 DIGEST_HOURS = 6
-DIGEST_OFFSET = 2  # 时段从北京时间 2 点开始：2、8、14、20
+DIGEST_OFFSET = 1  # 时段从北京时间 1 点开始：1、7、13、19（Claude 判断报告在每个时段的 20 分发出）
 BJ = _dt.timezone(_dt.timedelta(hours=8))
 
 
@@ -95,7 +95,7 @@ def digest(state, now=None):
                if r.get("seen_first") else "")
             + f"\n  来源：{' › '.join(r.get('path', []))}"
             f"\n  {trends_link(kw)}")
-    tail = "能不能做，看每天北京时间 7:20 和 19:20 的 Claude 判断报告。"
+    tail = "能不能做，看 20 分钟后的 Claude 判断报告（北京时间 1:20、7:20、13:20、19:20）。"
     # 全部列出；飞书单条消息有大小限制，太长就拆成几条
     msgs, cur = [], head
     for b in blocks:
