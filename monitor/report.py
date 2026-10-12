@@ -23,7 +23,9 @@ def fmt_path(path, kw):
 
 
 def fmt_ratio(r):
-    return "" if r is None else f"{r}×"
+    if r is None:
+        return ""
+    return "<1%" if r == 0 else f"{r}×"
 
 
 def rows_for(day, state):
@@ -55,12 +57,12 @@ def build(day, state):
              f"已复核 {len(rows)} 个 · **新词 {len(by_kind['新词'])} · 老词二次爆火 {len(by_kind['老词二次爆火'])} · "
              f"待观察 {len(by_kind['待观察'])}** · 今天运行 {len(runs)} 次，请求 {reqs} 次（UTC 时间）")
     L.append("")
-    L.append("> 全部是**全球**数据。「vs gpts」= 和 GPTs 一起查近 7 天时，这个词的平均热度是 GPTs 的几倍（手工对比图左边的平均值柱子）。"
+    L.append("> 全部是**全球**数据。「vs gpts」= 和 GPTs 一起查 30 天，最近 7 天这个词的热度是 GPTs 的几倍；"
+             "「估算日搜」= 倍数 × GPTs 日搜索量（约 5000）。「起来时间」= 这一波从哪天开始涨，「现在/峰值」= 最近一天是峰值的百分之几。"
              "「来源链路」= 从哪个词根一层层点进来的。新词只说明刚出现，能不能做还要看 SERP 和变现。")
     L.append("")
 
-    head = ("| 关键词 | 方向 | 首次出现 | 爆发日 | 走势 | vs gpts | 涨幅 | 来源链路 | 12 个月（周） | 30 天（天） "
-            "| 7 天（每 6 小时） | 备注 |")
+    head = "| 关键词 | 方向 | 起来时间 | 峰值日 | 现在/峰值 | 走势 | 估算日搜 | vs gpts | 涨幅 | 来源链路 | 30 天（天） | 备注 |"
     sep = "|---|---|---|---|---|---|---|---|---|---|---|---|"
     for kind in ORDER:
         items = by_kind.get(kind, [])
@@ -73,10 +75,11 @@ def build(day, state):
         L += [head, sep]
         for r in items:
             L.append("| " + " | ".join([
-                link(r["keyword"]), r.get("tag", ""), r.get("first_seen", ""), r.get("burst_date", ""),
-                r.get("status", ""), fmt_ratio(r.get("gpts_ratio")), r.get("formatted", ""),
-                fmt_path(r["path"], r["keyword"]), f"`{r.get('weekly_spark', '')}`", f"`{r.get('daily_spark', '')}`",
-                f"`{r.get('spark_7d', '')}`",
+                link(r["keyword"]), r.get("tag", ""), r.get("burst_date", ""), r.get("peak_date", ""),
+                f"{r['now_pct']}%" if r.get("now_pct") is not None else "", r.get("status", ""),
+                f"约 {r['est_daily']}/天" if r.get("est_daily") is not None else "",
+                fmt_ratio(r.get("gpts_ratio")), r.get("formatted", ""),
+                fmt_path(r["path"], r["keyword"]), f"`{r.get('daily_spark', '')}`",
                 r.get("note", "").replace("|", "/"),
             ]) + " |")
         L.append("")
@@ -123,8 +126,8 @@ def build(day, state):
 
     # 给 Claude 定时任务读的精简 JSON：只放值得判断的词
     keep = [r for r in rows if r["kind"] in ORDER]
-    slim = [{k: r.get(k) for k in ("keyword", "kind", "tag", "status", "gpts_ratio", "formatted", "path",
-                                   "first_seen", "burst_date", "weekly_spark", "daily_spark", "spark_7d", "note")}
+    slim = [{k: r.get(k) for k in ("keyword", "kind", "tag", "status", "gpts_ratio", "est_daily", "formatted", "path",
+                                   "first_seen", "burst_date", "peak_date", "now_pct", "daily_spark", "note")}
             for r in keep]
     (DATA / "latest.json").write_text(
         json.dumps({"date": day["date"], "items": slim}, ensure_ascii=False, indent=1), encoding="utf-8")

@@ -159,3 +159,72 @@ def junk_from_children(children, filter_reason):
     if n >= 2 or n / max(len(children), 1) >= 0.4:
         return reason
     return None
+
+
+def classify_month(dates, vals, tail=None):
+    """30 天日曲线（单独或和 GPTs 同图都可以，只看形状）判断：
+    新词 / 老词二次爆火 / 待观察 / 短时尖峰 / 老词 / 数据不足，
+    并给出 起来时间、峰值日、现在是峰值的百分之几、走势。"""
+    if tail and vals and tail[1] > max(vals) and tail[1] > 0:
+        # 今天（还没统计完）已经是最高点：今天刚爆
+        res = {"kind": "待观察", "status": "上升中", "burst_date": tail[0], "peak_date": tail[0],
+               "now_pct": 100, "daily_spark": spark(vals + [tail[1]], 30),
+               "first_seen": next((d for d, v in zip(dates, vals) if v > 0), tail[0]),
+               "note": "今天才冒头，几小时后重查"}
+        prior = [v for v in vals if v > 0]
+        if prior and max(vals) > 0.25 * tail[1] and sum(1 for v in vals if v > 0) > len(vals) * 0.3:
+            res["note"] = "老词今天突然变热，几小时后重查"
+        return res
+    if not vals or max(vals) == 0:
+        return {"kind": "数据不足", "daily_spark": spark(vals or [], 30)}
+    peak = max(vals)
+    peak_i = len(vals) - 1 - vals[::-1].index(peak)  # 最近一次峰值
+    # 起来时间：从峰值往前找，直到热度掉到峰值 20% 以下
+    start = peak_i
+    while start > 0 and vals[start - 1] >= 0.2 * peak:
+        start -= 1
+    prior = vals[:start]
+    res = {
+        "first_seen": next(d for d, v in zip(dates, vals) if v > 0),
+        "burst_date": dates[start],
+        "peak_date": dates[peak_i],
+        "daily_spark": spark(vals, 30),
+    }
+    last = vals[-1]
+    last3 = sum(vals[-3:]) / min(3, len(vals))
+    prev7 = sum(vals[-10:-3]) / 7 if len(vals) >= 10 else last3
+    res["now_pct"] = round(100 * last / peak)
+    if last3 < 0.3 * peak:
+        res["status"] = "已明显回落"
+    elif last3 >= prev7 * 1.2:
+        res["status"] = "上升中"
+    elif last3 <= prev7 * 0.8:
+        res["status"] = "回落中"
+    else:
+        res["status"] = "高位"
+
+    nonzero = sum(1 for v in prior if v > 0)
+    if prior and nonzero <= max(1, 0.2 * len(prior)) and max(prior) <= 0.25 * peak:
+        kind = "新词"
+    elif not prior:
+        kind = "老词"  # 整个 30 天都在高位：之前就有量
+        res["note"] = "30 天内一直有量，不是这个月才起来的"
+    else:
+        base = max(median(prior), 1)
+        boost = peak / base
+        res["boost"] = round(boost, 1)
+        kind = "老词二次爆火" if boost >= 5 else "老词"
+        if kind == "老词二次爆火":
+            res["note"] = f"之前就有量，这次峰值是平时的 {res['boost']} 倍"
+
+    after = vals[start:]
+    high_days = sum(1 for v in after if v >= 0.3 * peak)
+    if kind in ("新词", "老词二次爆火"):
+        if peak_i >= len(vals) - 2 and high_days <= 2:
+            kind = "待观察"
+            res["note"] = "最近 1~2 天才冒头，几小时后重查"
+        elif high_days <= 2 and res["status"] == "已明显回落":
+            kind = "短时尖峰"
+            res["note"] = "只热了一两天就回落（新闻 / 刷量 / 谜题答案常见这种形态）"
+    res["kind"] = kind
+    return res

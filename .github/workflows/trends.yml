@@ -78,8 +78,9 @@ jobs:
           REQUEST_INTERVAL: "8"   # 起始间隔；被限速会自动放慢，顺利会慢慢回到这个值
           CANDIDATE_MIN: "300"
           ROTATE_PER_RUN: "5"
-          ROTATE_DAYS: "3"
+          ROTATE_DAYS: "1"     # 所有词根每天都查一遍
           MAX_DEPTH: "3"
+          REF_DAILY: "5000"    # GPTs 每天约 5000 次搜索，用来估算日搜索量
           ROOT_SHARE: "0.35"
           FEISHU_WEBHOOK: ${{ secrets.FEISHU_WEBHOOK }}
           FEISHU_SECRET: ${{ secrets.FEISHU_SECRET }}

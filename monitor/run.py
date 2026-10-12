@@ -1,6 +1,9 @@
-"""主流程，模拟手工找词：
-  词根 → 看「相关查询 - 搜索量上升」→ 每个飙升词和 GPTs 对比、看曲线 → 再看这个词自己的飙升相关词 → 一层层往下挖。
-所有请求都是全球（不限国家）。
+"""主流程（全部是全球数据）：
+  1. 每天把所有词根查一遍：近 7 天「相关查询 - 搜索量上升」
+  2. 飙升 / 涨幅够大的词进预筛队列
+  3. 预筛：和 GPTs 一起查 30 天（1 次查询 = 2 个请求），判断是不是这个月才起来的新词、
+     算出和 GPTs 的倍数、估算日搜索量。大部分老词在这一步淘汰。
+  4. 只有新词 / 老词二次爆火 / 待观察，才去看它自己的近 7 天飙升相关词，继续往下挖（深度跟着信号走）
 
 环境变量：
   RUN_MINUTES       本次最多跑多少分钟（默认 20）
@@ -22,6 +25,8 @@ from .trends import RateLimited, Trends
 
 DATA = rules.OUT_DIR / "data"
 REF = "gpts"  # 参照词，和手工对比时用的 GPTs 一致
+REF_DAILY = int(os.getenv("REF_DAILY", "5000"))  # GPTs 每天大约多少次搜索，用来估算日搜索量
+PASS_KINDS = ("新词", "老词二次爆火", "待观察")
 
 
 def now():
@@ -159,39 +164,38 @@ class Runner:
 
     # ---------- 阶段 2：逐个查词，并往下挖 ----------
     def review_one(self, kw):
-        """返回 (复核结果, 这个词自己的飙升相关词)。"""
-        # 第 1 步：和 GPTs 一起看近 7 天 + 拿它的飙升相关词（3 次请求）
-        p = self.client.probe(kw, REF)
-        if p is None:
+        """返回 (复核结果, 这个词自己的飙升相关词)。没通过预筛的词不查相关词，相关词返回 []。"""
+        # 第 1 步：和 GPTs 一起查 30 天（2 个请求）
+        d = self.client.timeseries([kw, REF], "today 1-m")
+        if d is None:
             return None, None
-        children = p.get("rising") or []
-        r7 = classify.classify_7d(p["series"]) if p.get("series") else {}
-
+        dates, k = classify.complete(d, 0)
+        _, r = classify.complete(d, 1)
+        tail = classify.partial_tail(d, 0)
+        ratio = round(sum(k[-7:]) / sum(r[-7:]), 3) if sum(r[-7:]) else None
+        # 比 GPTs 小太多时同图里只剩 0 和 1，看不出形状，就单独再查一次（2 个请求）
+        if max(k + [tail[1] if tail else 0]) < 10:
+            d2 = self.client.timeseries([kw], "today 1-m")
+            if d2:
+                dates, k = classify.complete(d2)
+                tail = classify.partial_tail(d2)
+        res = classify.classify_month(dates, k, tail)
+        res["gpts_ratio"] = ratio
+        if ratio:
+            est = ratio * REF_DAILY
+            res["est_daily"] = int(round(est, -1)) if est >= 100 else int(round(est))
+        elif ratio == 0 and max(k or [0]) > 0:
+            res["note"] = "；".join(x for x in [res.get("note"), f"热度不到 GPTs 的 1%（每天少于约 {REF_DAILY // 100} 次）"] if x)
+        res["reviewed_at"] = now().isoformat()
+        if res["kind"] not in PASS_KINDS:
+            return res, []
+        # 第 2 步：通过预筛的词，看它自己的近 7 天飙升相关词（2 个请求），用来往下挖
+        children = self.client.related_rising(kw) or []
         junk = classify.junk_from_children(children, rules.filter_reason)
         if junk:
-            res = {"kind": "已过滤", "filter": junk, **r7,
-                   "note": f"它的飙升相关词多是「{junk}」类：" + "、".join(c["query"] for c in children[:3])}
-            res["reviewed_at"] = now().isoformat()
+            res.update(kind="已过滤", filter=junk,
+                       note=f"它的飙升相关词多是「{junk}」类：" + "、".join(c["query"] for c in children[:3]))
             return res, []
-
-        # 第 2 步：12 个月周曲线，判断是不是新词（2 次请求）
-        w = self.client.timeseries([kw], "today 12-m")
-        if w is None:
-            return None, children
-        dates, vals = classify.complete(w, keep_partial=True)
-        wres = classify.classify_weekly(dates, vals)
-        wres.update(r7)
-        dres = None
-        # 第 3 步：新词 / 爆发的老词，再看 30 天日曲线判断走势、是不是只热一天（2 次请求）
-        if wres["kind"] in ("新词", "爆发候选"):
-            d = self.client.timeseries([kw], "today 1-m")
-            if d:
-                ddates, dk = classify.complete(d)
-                dres = classify.classify_daily(ddates, dk, classify.partial_tail(d))
-        res = classify.finalize(wres, dres)
-        if r7.get("faded_7d") and res["kind"] in ("新词", "老词二次爆火"):
-            res["note"] = "；".join(x for x in [res.get("note"), "7 天内已明显回落"] if x)
-        res["reviewed_at"] = now().isoformat()
         return res, children
 
     def queue_order(self):
@@ -199,11 +203,10 @@ class Runner:
 
         def key(kv):
             kw, meta = kv
-            # 词本身带 AI 字样最优先，其次是工具类需求，再其次是从 AI 词根挖出来的
-            ai = (0 if rules.AI_WORDS.search(kw) else 1 if rules.TOOL_WORDS.search(kw)
-                  else 2 if rules.AI_WORDS.search(" ".join(meta.get("path", []))) else 3)
+            # 方向优先级：AI 视频/图片 > AI 工具 > 工具站 > 小游戏 > ……；同方向里，同一话题的变体靠后、层级浅和涨幅大的靠前
+            pri = rules.TAG_PRIORITY.get(rules.tag(kw, meta.get("path", [])), 5)
             variant = 1 if self.core_words(kw) & family else 0
-            return (ai, variant, meta.get("depth", 1), -meta.get("value", 0))
+            return (pri, variant, meta.get("depth", 1), -meta.get("value", 0))
         return sorted(((k, m) for k, m in self.state["pending"].items() if k not in self.skip), key=key)
 
     def review_pending(self):
@@ -215,13 +218,13 @@ class Runner:
             if time.time() > self.deadline:
                 log(f"时间用完，队列里还剩 {len(self.state['pending'])} 个词，下次继续")
                 break
-            # 每查 3 个词，留 1 个名额给从非 AI 词根（你自己的词根）挖出来的词，避免它们一直排不上
+            # AI 方向优先，但每查 3 个词留 1 个名额给工具站 / 小游戏 / 其他方向，避免它们一直排不上
             kw, meta = queue[0]
             if done % 3 == 2:
                 other = [kv for kv in queue
-                         if not rules.AI_WORDS.search((kv[1].get("path") or [kv[0]])[0])]
+                         if rules.TAG_PRIORITY.get(rules.tag(kv[0], kv[1].get("path", [])), 5) >= 2]
                 if other:
-                    kw, meta = min(other, key=lambda kv: (kv[1].get("depth", 1), -kv[1].get("value", 0)))
+                    kw, meta = other[0]
             res, children = self.review_one(kw)
             if res is None:
                 self.skip.add(kw)
@@ -242,9 +245,10 @@ class Runner:
                 continue
             log(f"[复核] {'  ' * (res['depth'] - 1)}{kw}: {res['kind']} {res.get('status', '')} "
                 f"GPTs×{res.get('gpts_ratio')}", private=True)
-            # 往下挖：看这个词自己的飙升相关词
-            self.day["expanded"][kw] = children
-            if res["depth"] < self.max_depth:
+            # 往下挖：只有通过预筛的词才有相关词
+            if children:
+                self.day["expanded"][kw] = children
+            if children and res["depth"] < self.max_depth:
                 n = self.take_rising(kw, children, res["path"], res["depth"] + 1)
                 if n:
                     log(f"        └ 往下一层：{n} 个新飙升词进队列", private=True)

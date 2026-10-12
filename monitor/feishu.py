@@ -34,7 +34,8 @@ def send(text):
 import datetime as _dt
 
 ALERT_KINDS = {"新词", "老词二次爆火"}
-ALERT_TAGS = {"AI 工具/模型/玩法", "AI 相关（词根）", "工具站需求"}
+ALERT_TAGS = {"AI 视频/图片", "AI 工具", "工具站", "小游戏", "AI 相关（词根）",
+              "AI 工具/模型/玩法", "工具站需求"}  # 后两个是旧版标签
 DIGEST_HOURS = 6
 DIGEST_OFFSET = 2  # 时段从北京时间 2 点开始：2、8、14、20
 BJ = _dt.timezone(_dt.timedelta(hours=8))
@@ -69,7 +70,8 @@ def digest(state, now=None):
         if r.get("status") == "已明显回落":
             continue
         items.append((kw, r))
-    items.sort(key=lambda x: -(x[1].get("gpts_ratio") or 0))
+    from .rules import TAG_PRIORITY
+    items.sort(key=lambda x: (TAG_PRIORITY.get(x[1].get("tag"), 1), -(x[1].get("gpts_ratio") or 0)))
 
     start_bj = _dt.datetime.fromisoformat(since).astimezone(BJ) if since else now.astimezone(BJ)
     head = (f"【Trends 新词汇总】{start_bj:%m-%d %H:%M} ~ {now.astimezone(BJ):%m-%d %H:%M}（北京时间）\n"
@@ -78,8 +80,12 @@ def digest(state, now=None):
     for kw, r in items:
         ratio = r.get("gpts_ratio")
         blocks.append(
-            f"· {kw}｜{r['kind']}｜{r.get('status') or '—'}｜vs GPTs {ratio if ratio is not None else '?'}×"
-            f"\n  来源：{' › '.join(r.get('path', []))}"
+            f"· {kw}｜{r.get('tag', '')}｜{r['kind']}｜{r.get('status') or '—'}"
+            f"\n  vs GPTs {ratio if ratio is not None else '?'}×"
+            + (f"（约 {r['est_daily']} 次/天）" if r.get("est_daily") is not None else "")
+            + (f"｜{r['burst_date'][5:]} 起来" if r.get("burst_date") else "")
+            + (f"｜现在是峰值的 {r['now_pct']}%" if r.get("now_pct") is not None else "")
+            + f"\n  来源：{' › '.join(r.get('path', []))}"
             f"\n  {trends_link(kw)}")
     tail = "能不能做，看每天北京时间 7:20 和 19:20 的 Claude 判断报告。"
     # 全部列出；飞书单条消息有大小限制，太长就拆成几条
