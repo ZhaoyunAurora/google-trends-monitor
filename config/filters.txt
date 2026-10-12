@@ -13,3 +13,4 @@
 谜题答案 | \b(wordle|crossword|crossword clue|clue|nyt mini|connections hint|strands|answer today|answers today)\b
 刷量垃圾 | \b(review|comparison|essentials|setup|for beginners|best laptop|tourist attractions|how to bake|how to make sushi|best pizza|cheapest flights|best time to visit)\b
 人物百科 | \b(wikipedia|net worth|height|wife|husband|girlfriend|boyfriend|biography|parents)\b
+体育球队 | \b(dodgers|yankees|mets|red sox|cubs|astros|phillies|braves|padres|giants|mariners|blue jays|lakers|celtics|warriors|knicks|bulls|heat|nuggets|bucks|cowboys|eagles|chiefs|packers|steelers|patriots|49ers|ravens|bills|bears|jets|real madrid|barcelona|man united|manchester united|man city|liverpool|arsenal|chelsea|bayern|psg|juventus|inter miami)\b

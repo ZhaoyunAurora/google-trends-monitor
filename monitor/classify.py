@@ -167,16 +167,19 @@ def classify_month(dates, vals, tail=None):
     """30 天日曲线（单独或和 GPTs 同图都可以，只看形状）判断：
     新词 / 老词二次爆火 / 待观察 / 短时尖峰 / 老词 / 数据不足，
     并给出 起来时间、峰值日、现在是峰值的百分之几、走势。"""
-    if tail and vals and tail[1] > max(vals) and tail[1] > 0:
-        # 今天（还没统计完）已经是最高点：今天刚爆
-        res = {"kind": "待观察", "status": "上升中", "burst_date": tail[0], "peak_date": tail[0],
-               "now_pct": 100, "daily_spark": spark(vals + [tail[1]], 30),
-               "first_seen": next((d for d, v in zip(dates, vals) if v > 0), tail[0]),
-               "note": "今天才冒头，几小时后重查"}
-        prior = [v for v in vals if v > 0]
-        if prior and max(vals) > 0.25 * tail[1] and sum(1 for v in vals if v > 0) > len(vals) * 0.3:
-            res["note"] = "老词今天突然变热，几小时后重查"
-        return res
+    if tail and vals and tail[1] > 0:
+        # 今天（还没统计完）的值。只有明显高出之前，才算"今天刚冒头"：
+        # 之前几乎没量的词：今天超过之前的最高点；一直有量的老词：今天要到平时（中位数）的 3 倍以上
+        nonzero_days = sum(1 for v in vals if v > 0)
+        quiet_before = nonzero_days <= max(2, 0.2 * len(vals))
+        base = max(median(vals), 1)
+        if (quiet_before and tail[1] > max(vals)) or (not quiet_before and tail[1] >= 3 * base and tail[1] > max(vals)):
+            res = {"kind": "待观察", "status": "上升中", "burst_date": tail[0], "peak_date": tail[0],
+                   "now_pct": 100, "daily_spark": spark(vals + [tail[1]], 30),
+                   "first_seen": next((d for d, v in zip(dates, vals) if v > 0), tail[0]),
+                   "note": "今天才冒头，几小时后重查" if quiet_before else
+                           f"老词今天突然是平时的 {round(tail[1] / base, 1)} 倍，几小时后重查"}
+            return res
     if not vals or max(vals) == 0:
         return {"kind": "数据不足", "daily_spark": spark(vals or [], 30)}
     peak = max(vals)
