@@ -142,6 +142,8 @@ def classify_7d(points):
     last24 = sum(kv[-24:]) / max(len(kv[-24:]), 1)
     # 值太小时（相对 GPTs 只有 0/1），形状没有参考价值
     res["faded_7d"] = peak >= 5 and peak_i < len(kv) - 36 and last24 < 0.15 * peak
+    prev48 = sum(kv[-72:-24]) / max(len(kv[-72:-24]), 1)
+    res["rising_7d"] = last24 > 0 and last24 >= prev48 * 1.2
     return res
 
 

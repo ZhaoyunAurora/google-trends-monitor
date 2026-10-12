@@ -62,8 +62,9 @@ def build(day, state):
              "「来源链路」= 从哪个词根一层层点进来的。新词只说明刚出现，能不能做还要看 SERP 和变现。")
     L.append("")
 
-    head = "| 关键词 | 方向 | 起来时间 | 峰值日 | 现在/峰值 | 走势 | 估算日搜 | vs gpts | 涨幅 | 来源链路 | 30 天（天） | 备注 |"
-    sep = "|---|---|---|---|---|---|---|---|---|---|---|---|"
+    head = ("| 关键词 | 方向 | 首次上榜 | 连续/共 | 起来时间 | 峰值日 | 现在/峰值 | 走势 | 估算日搜 | vs gpts | 涨幅 "
+            "| 来源链路 | 30 天（天） | 备注 |")
+    sep = "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"
     for kind in ORDER:
         items = by_kind.get(kind, [])
         L.append(f"## {kind}（{len(items)}）")
@@ -75,7 +76,9 @@ def build(day, state):
         L += [head, sep]
         for r in items:
             L.append("| " + " | ".join([
-                link(r["keyword"]), r.get("tag", ""), r.get("burst_date", ""), r.get("peak_date", ""),
+                link(r["keyword"]), r.get("tag", ""), r.get("seen_first", ""),
+                f"{r.get('streak', 0)}/{r.get('seen_days', 0)} 天" if r.get("seen_days") else "",
+                r.get("burst_date", ""), r.get("peak_date", ""),
                 f"{r['now_pct']}%" if r.get("now_pct") is not None else "", r.get("status", ""),
                 f"约 {r['est_daily']}/天" if r.get("est_daily") is not None else "",
                 fmt_ratio(r.get("gpts_ratio")), r.get("formatted", ""),
@@ -84,8 +87,8 @@ def build(day, state):
             ]) + " |")
         L.append("")
 
-    others = by_kind.get("老词", []) + by_kind.get("数据不足", [])
-    L.append(f"## 复核后是老词 / 数据不足（{len(others)}）")
+    others = by_kind.get("老词", []) + by_kind.get("数据不足", []) + by_kind.get("量太小", [])
+    L.append(f"## 复核后是老词 / 量太小 / 数据不足（{len(others)}）")
     L.append("")
     L.append("、".join(f"{r['keyword']}（{r['kind']}）" for r in others) or "暂无")
     L.append("")
@@ -127,7 +130,8 @@ def build(day, state):
     # 给 Claude 定时任务读的精简 JSON：只放值得判断的词
     keep = [r for r in rows if r["kind"] in ORDER]
     slim = [{k: r.get(k) for k in ("keyword", "kind", "tag", "status", "gpts_ratio", "est_daily", "formatted", "path",
-                                   "first_seen", "burst_date", "peak_date", "now_pct", "daily_spark", "note")}
+                                   "first_seen", "seen_first", "streak", "seen_days", "burst_date", "peak_date", "now_pct",
+                                   "daily_spark", "note")}
             for r in keep]
     (DATA / "latest.json").write_text(
         json.dumps({"date": day["date"], "items": slim}, ensure_ascii=False, indent=1), encoding="utf-8")

@@ -1,9 +1,12 @@
 """主流程（全部是全球数据）：
-  1. 每天把所有词根查一遍：近 7 天「相关查询 - 搜索量上升」
-  2. 飙升 / 涨幅够大的词进预筛队列
-  3. 预筛：和 GPTs 一起查 30 天（1 次查询 = 2 个请求），判断是不是这个月才起来的新词、
-     算出和 GPTs 的倍数、估算日搜索量。大部分老词在这一步淘汰。
-  4. 只有新词 / 老词二次爆火 / 待观察，才去看它自己的近 7 天飙升相关词，继续往下挖（深度跟着信号走）
+  第 0 层：每天把所有词根查一遍近 7 天「相关查询 - 搜索量上升」，飙升或涨幅 ≥ 500% 的进入第 1 层。
+  第 1~4 层的每个词：
+    1. 和 GPTs 一起看近 7 天，同时拿到它自己的近 7 天上升相关词（1 次查询，3 个请求）
+       → GPTs 倍数、估算日搜索量、7 天在涨还是在落
+    2. 不管它本身新不新，它的飙升 / ≥500% 相关词都进入下一层（最多 4 层）；相关词全是谜题答案 / 新闻等垃圾的，这条线剪掉
+    3. 7 天量级够大（估算 ≥ 100 次/天）或 7 天在涨，再单独看 1 个月（2 个请求）
+       → 新词 / 老词二次爆火 / 待观察 / 短时尖峰 / 老词，起来时间、峰值日、现在是峰值的百分之几
+  跨天追踪：记录每个词第一次出现在上升列表的日期、出现过几天、连续几天。
 
 环境变量：
   RUN_MINUTES       本次最多跑多少分钟（默认 20）
@@ -26,7 +29,7 @@ from .trends import RateLimited, Trends
 DATA = rules.OUT_DIR / "data"
 REF = "gpts"  # 参照词，和手工对比时用的 GPTs 一致
 REF_DAILY = int(os.getenv("REF_DAILY", "5000"))  # GPTs 每天大约多少次搜索，用来估算日搜索量
-PASS_KINDS = ("新词", "老词二次爆火", "待观察")
+MONTH_MIN = int(os.getenv("MONTH_MIN", "100"))  # 7 天估算日搜达到多少才看 1 个月
 
 
 def now():
@@ -60,8 +63,8 @@ def log(msg, private=False):
 class Runner:
     def __init__(self, client=None):
         self.minutes = float(os.getenv("RUN_MINUTES", "20"))
-        self.cand_min = int(os.getenv("CANDIDATE_MIN", "300"))
-        self.max_depth = int(os.getenv("MAX_DEPTH", "3"))
+        self.cand_min = int(os.getenv("CANDIDATE_MIN", "500"))
+        self.max_depth = int(os.getenv("MAX_DEPTH", "4"))
         self.root_share = float(os.getenv("ROOT_SHARE", "0.35"))
         self.ttl = int(os.getenv("REVIEW_TTL_DAYS", "3"))
         self.rotate_n = int(os.getenv("ROTATE_PER_RUN", "15"))
@@ -95,6 +98,7 @@ class Runner:
                 self.day["filtered"][kw] = reason
                 continue
             hits += 1
+            self.track(kw, it)
             c = self.day["candidates"].setdefault(
                 kw, {"roots": [], "value": 0, "formatted": "", "path": path + [parent], "depth": depth})
             root = path[0] if path else parent
@@ -107,8 +111,32 @@ class Runner:
                 c["formatted"] = it["formatted"]
             if not self.fresh(kw) and kw not in self.state["pending"]:
                 self.state["pending"][kw] = {"roots": c["roots"], "value": c["value"],
-                                             "path": c["path"], "depth": c["depth"]}
+                                             "path": c["path"], "depth": c["depth"], "added": today()}
         return hits
+
+    def track(self, kw, it):
+        """跨天追踪：这个词哪天第一次出现在上升列表、出现过哪些天、最高涨幅。"""
+        t = self.state.setdefault("seen", {}).setdefault(kw, {"first": today(), "days": [], "max": 0})
+        if today() not in t["days"]:
+            t["days"] = (t["days"] + [today()])[-30:]
+        v = 99999 if it["breakout"] else it["value"]
+        if v > t["max"]:
+            t["max"], t["max_fmt"] = v, it["formatted"]
+
+    def seen_info(self, kw):
+        t = self.state.get("seen", {}).get(kw)
+        if not t:
+            return {}
+        days = sorted(t["days"])
+        streak = 1
+        for a, b in zip(days[::-1], days[-2::-1]):
+            if (dt.date.fromisoformat(a) - dt.date.fromisoformat(b)).days == 1:
+                streak += 1
+            else:
+                break
+        if days and days[-1] < (now().date() - dt.timedelta(days=1)).isoformat():
+            streak = 0  # 最近两天没再出现
+        return {"seen_first": t["first"], "seen_days": len(days), "streak": streak}
 
     GENERIC = set("""ai video videos image images photo photos pic picture song songs music version app apps free online
         generator maker editor tool tools new trend trends prompt prompts the a an of to for and in on with how what is
@@ -164,38 +192,37 @@ class Runner:
 
     # ---------- 阶段 2：逐个查词，并往下挖 ----------
     def review_one(self, kw):
-        """返回 (复核结果, 这个词自己的飙升相关词)。没通过预筛的词不查相关词，相关词返回 []。"""
-        # 第 1 步：和 GPTs 一起查 30 天（2 个请求）
-        d = self.client.timeseries([kw, REF], "today 1-m")
-        if d is None:
+        """返回 (结果, 这个词自己的上升相关词)。"""
+        # 1. 和 GPTs 一起看近 7 天 + 它自己的近 7 天上升相关词（3 个请求）
+        p = self.client.probe(kw, REF)
+        if p is None:
             return None, None
-        dates, k = classify.complete(d, 0)
-        _, r = classify.complete(d, 1)
-        tail = classify.partial_tail(d, 0)
-        ratio = round(sum(k[-7:]) / sum(r[-7:]), 3) if sum(r[-7:]) else None
-        # 比 GPTs 小太多时同图里只剩 0 和 1，看不出形状，就单独再查一次（2 个请求）
-        if max(k + [tail[1] if tail else 0]) < 10:
-            d2 = self.client.timeseries([kw], "today 1-m")
-            if d2:
-                dates, k = classify.complete(d2)
-                tail = classify.partial_tail(d2)
-        res = classify.classify_month(dates, k, tail)
-        res["gpts_ratio"] = ratio
+        children = p.get("rising") or []
+        res = classify.classify_7d(p["series"]) if p.get("series") else {}
+        res["reviewed_at"] = now().isoformat()
+        ratio = res.get("gpts_ratio")
         if ratio:
             est = ratio * REF_DAILY
             res["est_daily"] = int(round(est, -1)) if est >= 100 else int(round(est))
-        elif ratio == 0 and max(k or [0]) > 0:
-            res["note"] = "；".join(x for x in [res.get("note"), f"热度不到 GPTs 的 1%（每天少于约 {REF_DAILY // 100} 次）"] if x)
-        res["reviewed_at"] = now().isoformat()
-        if res["kind"] not in PASS_KINDS:
-            return res, []
-        # 第 2 步：通过预筛的词，看它自己的近 7 天飙升相关词（2 个请求），用来往下挖
-        children = self.client.related_rising(kw) or []
+
+        # 2. 相关词全是谜题答案 / 新闻 / 体育之类：这条线剪掉
         junk = classify.junk_from_children(children, rules.filter_reason)
         if junk:
             res.update(kind="已过滤", filter=junk,
-                       note=f"它的飙升相关词多是「{junk}」类：" + "、".join(c["query"] for c in children[:3]))
+                       note=f"它的上升相关词多是「{junk}」类：" + "、".join(c["query"] for c in children[:3]))
             return res, []
+
+        # 3. 7 天量级够大或者在涨，再单独看 1 个月（2 个请求）
+        if (res.get("est_daily") or 0) >= MONTH_MIN or (res.get("rising_7d") and ratio):
+            d = self.client.timeseries([kw], "today 1-m")
+            if d:
+                dates, k = classify.complete(d)
+                m = classify.classify_month(dates, k, classify.partial_tail(d))
+                res.update(m)
+        if "kind" not in res:
+            res["kind"] = "量太小" if not ratio or (res.get("est_daily") or 0) < MONTH_MIN else "数据不足"
+            if ratio == 0:
+                res["note"] = f"热度不到 GPTs 的 1%（每天少于约 {REF_DAILY // 100} 次）"
         return res, children
 
     def queue_order(self):
@@ -237,6 +264,7 @@ class Runner:
             res["path"] = meta.get("path", [])
             res["depth"] = meta.get("depth", 1)
             res["tag"] = rules.tag(kw, res["path"])
+            res.update(self.seen_info(kw))
             self.state["reviewed"][kw] = res
             done += 1
             if res["kind"] == "已过滤":
@@ -245,7 +273,7 @@ class Runner:
                 continue
             log(f"[复核] {'  ' * (res['depth'] - 1)}{kw}: {res['kind']} {res.get('status', '')} "
                 f"GPTs×{res.get('gpts_ratio')}", private=True)
-            # 往下挖：只有通过预筛的词才有相关词
+            # 往下挖：不管这个词本身新不新，它的上升相关词都进入下一层
             if children:
                 self.day["expanded"][kw] = children
             if children and res["depth"] < self.max_depth:
@@ -289,10 +317,13 @@ class Runner:
         self.state["reviewed"] = {k: v for k, v in self.state["reviewed"].items()
                                   if v.get("reviewed_at", "") >= cutoff}
         self.state["notified"] = {k: v for k, v in self.state.get("notified", {}).items() if v >= cutoff}
-        pend = self.state["pending"]
-        if len(pend) > 600:
-            keep = dict(self.queue_order()[:600])
-            self.state["pending"] = keep
+        # 超过 7 天还没轮到的词丢掉
+        old = (now().date() - dt.timedelta(days=7)).isoformat()
+        self.state["pending"] = {k: m for k, m in self.state["pending"].items()
+                                 if m.get("added", today()) >= old}
+        seen_cut = (now().date() - dt.timedelta(days=30)).isoformat()
+        self.state["seen"] = {k: t for k, t in self.state.get("seen", {}).items()
+                              if t["days"] and t["days"][-1] >= seen_cut}
 
 
 if __name__ == "__main__":

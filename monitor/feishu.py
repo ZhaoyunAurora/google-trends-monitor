@@ -33,7 +33,9 @@ def send(text):
 # 平时只存结果，不打扰。
 import datetime as _dt
 
-ALERT_KINDS = {"新词", "老词二次爆火"}
+ALERT_KINDS = {"新词", "老词二次爆火", "待观察"}
+PUSH_MIN = int(os.getenv("PUSH_MIN", "250"))        # 新词 / 老词二次爆火：估算每天 ≥ 250 次才推
+PUSH_MIN_EARLY = int(os.getenv("PUSH_MIN_EARLY", "100"))  # 今天刚冒头的：≥ 100 次就推，标 🆕
 ALERT_TAGS = {"AI 视频/图片", "AI 工具", "工具站", "小游戏", "AI 相关（词根）",
               "AI 工具/模型/玩法", "工具站需求"}  # 后两个是旧版标签
 DIGEST_HOURS = 6
@@ -69,6 +71,9 @@ def digest(state, now=None):
             continue
         if r.get("status") == "已明显回落":
             continue
+        need = PUSH_MIN_EARLY if r.get("kind") == "待观察" else PUSH_MIN
+        if (r.get("est_daily") or 0) < need:
+            continue
         items.append((kw, r))
     from .rules import TAG_PRIORITY
     items.sort(key=lambda x: (TAG_PRIORITY.get(x[1].get("tag"), 1), -(x[1].get("gpts_ratio") or 0)))
@@ -80,11 +85,14 @@ def digest(state, now=None):
     for kw, r in items:
         ratio = r.get("gpts_ratio")
         blocks.append(
-            f"· {kw}｜{r.get('tag', '')}｜{r['kind']}｜{r.get('status') or '—'}"
+            f"· {'🆕 ' if r['kind'] == '待观察' else ''}{kw}｜{r.get('tag', '')}｜"
+            f"{'今天刚冒头' if r['kind'] == '待观察' else r['kind']}｜{r.get('status') or '—'}"
             f"\n  vs GPTs {ratio if ratio is not None else '?'}×"
             + (f"（约 {r['est_daily']} 次/天）" if r.get("est_daily") is not None else "")
             + (f"｜{r['burst_date'][5:]} 起来" if r.get("burst_date") else "")
             + (f"｜现在是峰值的 {r['now_pct']}%" if r.get("now_pct") is not None else "")
+            + (f"\n  {r['seen_first'][5:]} 首次上榜｜连续 {r.get('streak', 0)} 天 / 共 {r.get('seen_days', 0)} 天"
+               if r.get("seen_first") else "")
             + f"\n  来源：{' › '.join(r.get('path', []))}"
             f"\n  {trends_link(kw)}")
     tail = "能不能做，看每天北京时间 7:20 和 19:20 的 Claude 判断报告。"

@@ -55,6 +55,14 @@ class FakeTrends:
     requests = 0
     count_429 = 0
 
+    def probe(self, kw, ref="gpts"):
+        self.requests += 3
+        k = SHAPES.get(kw, [0] * 31)[-8:-1]
+        scale = 0.08 if kw == "tiny new tool" else 1
+        hours = [int(v * scale) for v in k for _ in range(24)]
+        series = [{"date": f"h{i}", "values": [v, 50], "partial": False} for i, v in enumerate(hours)]
+        return {"series": series, "rising": CHILDREN.get(kw, [])}
+
     def related_rising(self, kw, time_range="now 7-d"):
         self.requests += 2
         return CHILDREN.get(kw, [])
