@@ -12,3 +12,4 @@
 天气灾害 | \b(hurricane|cyclone|typhoon|storm tracker|weather|earthquake|tornado|wildfire)\b
 谜题答案 | \b(wordle|crossword|crossword clue|clue|nyt mini|connections hint|strands|answer today|answers today)\b
 刷量垃圾 | \b(review|comparison|essentials|setup|for beginners|best laptop|tourist attractions|how to bake|how to make sushi|best pizza|cheapest flights|best time to visit)\b
+人物百科 | \b(wikipedia|net worth|height|wife|husband|girlfriend|boyfriend|biography|parents)\b

@@ -14,7 +14,7 @@ Claude 定时任务每天北京时间 7:20、19:20 读私有仓库里的结果�
    - Permissions → Repository permissions → **Contents: Read and write**
 3. 本仓库 → Settings → Secrets and variables → Actions → New repository secret：`DATA_REPO_TOKEN` = 上面的令牌。
 4. 飞书（可选）：在**两个仓库**都加 Secret `FEISHU_WEBHOOK`（开了签名校验再加 `FEISHU_SECRET`）。
-   本仓库的用来推每小时的新词提醒，私有仓库的用来推早晚的 Claude 判断。
+   本仓库的用来推新词汇总（每 6 小时一次，北京时间 0、6、12、18 点后），私有仓库的用来推早晚的 Claude 判断。
 
 没有 `DATA_REPO_TOKEN` 时工作流不会运行，结果不会写进公开仓库。
 

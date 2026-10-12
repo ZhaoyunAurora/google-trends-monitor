@@ -12,7 +12,7 @@ ORDER = ["新词", "老词二次爆火", "待观察", "短时尖峰"]
 STATUS_RANK = {"上升中": 0, "高位": 1, "回落中": 2, "已明显回落": 3, "": 4}
 
 
-def link(kw, span="today 12-m"):
+def link(kw, span="today 1-m"):
     q = urllib.parse.urlencode({"date": span, "q": kw})
     return f"[{kw}](https://trends.google.com/trends/explore?{q})"
 

@@ -256,7 +256,7 @@ class Runner:
             log(stopped)
         finally:
             self.cleanup()
-            feishu.alert_new(self.state)
+            feishu.digest(self.state)
             self.day["runs"].append({
                 "at": now().isoformat(timespec="minutes"),
                 "requests": self.client.requests,
