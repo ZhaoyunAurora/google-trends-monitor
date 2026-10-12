@@ -29,18 +29,19 @@ def send(text):
         return False
 
 
-# 新词汇总：每 6 小时（北京时间 0、6、12、18 点之后的第一次运行）把这段时间的新词合并成一条推送。
+# 新词汇总：每 6 小时（北京时间 2、8、14、20 点之后的第一次运行）把这段时间的新词合并成一条推送。
 # 平时只存结果，不打扰。
 import datetime as _dt
 
 ALERT_KINDS = {"新词", "老词二次爆火"}
 ALERT_TAGS = {"AI 工具/模型/玩法", "AI 相关（词根）", "工具站需求"}
 DIGEST_HOURS = 6
+DIGEST_OFFSET = 2  # 时段从北京时间 2 点开始：2、8、14、20
 BJ = _dt.timezone(_dt.timedelta(hours=8))
 
 
 def _slot(now):
-    bj = now.astimezone(BJ)
+    bj = now.astimezone(BJ) - _dt.timedelta(hours=DIGEST_OFFSET)
     return bj.strftime("%Y-%m-%d") + f"-{bj.hour // DIGEST_HOURS}"
 
 
@@ -73,17 +74,26 @@ def digest(state, now=None):
     start_bj = _dt.datetime.fromisoformat(since).astimezone(BJ) if since else now.astimezone(BJ)
     head = (f"【Trends 新词汇总】{start_bj:%m-%d %H:%M} ~ {now.astimezone(BJ):%m-%d %H:%M}（北京时间）\n"
             f"这段时间查了 {len(checked)} 个词，值得看的新词 {len(items)} 个（全球数据）")
-    lines = [head]
-    for kw, r in items[:20]:
+    blocks = []
+    for kw, r in items:
         ratio = r.get("gpts_ratio")
-        lines.append(
-            f"\n· {kw}｜{r['kind']}｜{r.get('status') or '—'}｜vs GPTs {ratio if ratio is not None else '?'}×"
+        blocks.append(
+            f"· {kw}｜{r['kind']}｜{r.get('status') or '—'}｜vs GPTs {ratio if ratio is not None else '?'}×"
             f"\n  来源：{' › '.join(r.get('path', []))}"
             f"\n  {trends_link(kw)}")
-    if len(items) > 20:
-        lines.append(f"\n……另有 {len(items) - 20} 个，见私有仓库 reports/latest.md")
-    lines.append("\n能不能做，看每天北京时间 7:20 和 19:20 的 Claude 判断报告。")
-    if send("\n".join(lines)):
+    tail = "能不能做，看每天北京时间 7:20 和 19:20 的 Claude 判断报告。"
+    # 全部列出；飞书单条消息有大小限制，太长就拆成几条
+    msgs, cur = [], head
+    for b in blocks:
+        if len((cur + "\n\n" + b).encode()) > 15000:
+            msgs.append(cur)
+            cur = "（续）"
+        cur += "\n\n" + b
+    msgs.append(cur + "\n\n" + tail)
+    if len(msgs) > 1:
+        msgs[0] = msgs[0].replace("（全球数据）", f"（全球数据，分 {len(msgs)} 条发送）", 1)
+    ok = all([send(m) for m in msgs])
+    if ok:
         today = now.astimezone(BJ).strftime("%Y-%m-%d")
         for kw, _ in items:
             sent[kw] = today
