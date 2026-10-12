@@ -19,6 +19,7 @@ class RateLimited(Exception):
 class Trends:
     def __init__(self, interval=25, max_consecutive_429=4, log=None):
         self.interval = interval
+        self.min_interval = interval
         self.max_429 = max_consecutive_429
         self.log = log or (lambda msg, private=False: print(msg))
         self.requests = 0
@@ -41,7 +42,7 @@ class Trends:
             self.log(f"[cookie] 失败: {e}")
 
     def _throttle(self):
-        wait = self.interval + random.uniform(0, 8) - (time.time() - self._last)
+        wait = self.interval * random.uniform(1.0, 1.3) - (time.time() - self._last)
         if wait > 0:
             time.sleep(wait)
 
@@ -58,9 +59,13 @@ class Trends:
             self.requests += 1
             if r.status_code == 200:
                 self._consec_429 = 0
+                # 一直顺利就慢慢提速，但不低于起始间隔
+                self.interval = max(self.min_interval, self.interval * 0.97)
                 return json.loads(r.text.split("\n", 1)[1])
             if r.status_code == 429:
                 self.count_429 += 1
+                # 被限速就放慢（最多 40 秒一次）
+                self.interval = min(40.0, self.interval * 1.5)
                 self._consec_429 += 1
                 if self._consec_429 >= self.max_429:
                     # 连续被限速：歇 4~5 分钟、换新会话再试，最多 3 次；时间不够就收工

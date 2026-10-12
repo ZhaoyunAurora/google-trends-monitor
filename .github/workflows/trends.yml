@@ -75,7 +75,7 @@ jobs:
           OUT_DIR: store
           QUIET: "1"
           RUN_MINUTES: ${{ github.event.inputs.minutes || '12' }}
-          REQUEST_INTERVAL: "25"
+          REQUEST_INTERVAL: "8"   # 起始间隔；被限速会自动放慢，顺利会慢慢回到这个值
           CANDIDATE_MIN: "300"
           ROTATE_PER_RUN: "5"
           ROTATE_DAYS: "3"

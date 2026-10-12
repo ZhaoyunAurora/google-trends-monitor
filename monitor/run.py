@@ -215,7 +215,13 @@ class Runner:
             if time.time() > self.deadline:
                 log(f"时间用完，队列里还剩 {len(self.state['pending'])} 个词，下次继续")
                 break
+            # 每查 3 个词，留 1 个名额给从非 AI 词根（你自己的词根）挖出来的词，避免它们一直排不上
             kw, meta = queue[0]
+            if done % 3 == 2:
+                other = [kv for kv in queue
+                         if not rules.AI_WORDS.search((kv[1].get("path") or [kv[0]])[0])]
+                if other:
+                    kw, meta = min(other, key=lambda kv: (kv[1].get("depth", 1), -kv[1].get("value", 0)))
             res, children = self.review_one(kw)
             if res is None:
                 self.skip.add(kw)
