@@ -23,7 +23,7 @@ import json
 import os
 import time
 
-from . import classify, feishu, report, rules
+from . import classify, feishu, report, rules, signals
 from .trends import RateLimited, Trends
 
 DATA = rules.OUT_DIR / "data"
@@ -65,6 +65,8 @@ class Runner:
         self.minutes = float(os.getenv("RUN_MINUTES", "20"))
         self.cand_min = int(os.getenv("CANDIDATE_MIN", "500"))
         self.max_depth = int(os.getenv("MAX_DEPTH", "4"))
+        self.deep_min = int(os.getenv("DEEP_MIN", "1000"))  # 第 2 层以下，没有「飙升」标签时涨幅要 ≥ 1000%
+        self.signal_hours = float(os.getenv("SIGNAL_HOURS", "3"))  # 早期信号源多久抓一次
         self.root_share = float(os.getenv("ROOT_SHARE", "0.35"))
         self.ttl = int(os.getenv("REVIEW_TTL_DAYS", "3"))
         self.rotate_n = int(os.getenv("ROTATE_PER_RUN", "15"))
@@ -87,8 +89,9 @@ class Runner:
     def take_rising(self, parent, items, path, depth):
         """把某个词（词根或上一层的词）的飙升相关词放进待查队列。返回进队列的个数。"""
         hits = 0
+        need = self.cand_min if depth <= 1 else self.deep_min
         for it in items:
-            if not (it["breakout"] or it["value"] >= self.cand_min):
+            if not (it["breakout"] or it["value"] >= need):
                 continue
             kw = it["query"]
             if kw == parent or kw in self.root_set or kw in path:
@@ -154,6 +157,31 @@ class Runner:
             if r.get("reviewed_at", "") >= cutoff:
                 words |= self.core_words(k)
         return words
+
+    # ---------- 早期信号源 ----------
+    def refresh_signals(self):
+        last = self.state.get("signals_at", "")
+        if last and now() - dt.datetime.fromisoformat(last) < dt.timedelta(hours=self.signal_hours):
+            return
+        items, status = signals.fetch_all(log=log)
+        self.state["signals_at"] = now().isoformat()
+        stamp = now().strftime("%Y-%m-%d-%H")
+        save_json(DATA / "signals" / f"{stamp}.json", {"at": now().isoformat(), "status": status, "items": items})
+        save_json(DATA / "signals" / "latest.json", {"at": now().isoformat(), "status": status, "items": items})
+        seen = self.state.setdefault("signal_seen", {})
+        queued = 0
+        for it in items:
+            kw = it.get("keyword")
+            if not kw or kw in seen or len(kw) < 3 or len(kw.split()) > 6:
+                continue
+            seen[kw] = today()
+            if rules.filter_reason(kw) or self.fresh(kw) or kw in self.state["pending"]:
+                continue
+            # 信号源来的词：放到第 1 层，走快车道去 Google 趋势验证，同样会往下挖它的相关词
+            self.state["pending"][kw] = {"roots": [it["source"]], "value": 99999, "path": [it["source"]],
+                                         "depth": 1, "added": today(), "signal": it["source"]}
+            queued += 1
+        log(f"[信号] 新进队列 {queued} 个词")
 
     # ---------- 阶段 1：查词根 ----------
     def pick_roots(self):
@@ -237,7 +265,7 @@ class Runner:
             days = len(seen.get(kw, {}).get("days", []))
             # 方向优先级：AI 视频/图片 > AI 工具 > 工具站 > 小游戏 > ……；同方向里，同一话题的变体靠后、层级浅和涨幅大的靠前
             pri = rules.TAG_PRIORITY.get(rules.tag(kw, meta.get("path", [])), 5)
-            lane = 0 if days >= 2 and pri <= 3 else 1
+            lane = 0 if (days >= 2 and pri <= 3) or meta.get("signal") else 1
             variant = 1 if self.core_words(kw) & family else 0
             return (lane, -days, pri, variant, meta.get("depth", 1), -meta.get("value", 0))
         return sorted(((k, m) for k, m in self.state["pending"].items() if k not in self.skip), key=key)
@@ -293,6 +321,10 @@ class Runner:
         start = time.time()
         stopped = ""
         try:
+            try:
+                self.refresh_signals()
+            except Exception as e:  # noqa: BLE001  信号源出错不影响主流程
+                log(f"[信号] 出错：{type(e).__name__}")
             self.scan_roots(budget_until=start + (self.deadline - start) * self.root_share)
             self.review_pending()
         except RateLimited:
@@ -323,6 +355,7 @@ class Runner:
         self.state["reviewed"] = {k: v for k, v in self.state["reviewed"].items()
                                   if v.get("reviewed_at", "") >= cutoff}
         self.state["notified"] = {k: v for k, v in self.state.get("notified", {}).items() if v >= cutoff}
+        self.state["signal_seen"] = {k: v for k, v in self.state.get("signal_seen", {}).items() if v >= cutoff}
         # 超过 7 天还没轮到的词丢掉
         old = (now().date() - dt.timedelta(days=7)).isoformat()
         self.state["pending"] = {k: m for k, m in self.state["pending"].items()

@@ -97,6 +97,11 @@ def digest(state, now=None):
                if r.get("seen_first") else "")
             + f"\n  来源：{' › '.join(r.get('path', []))}"
             f"\n  {trends_link(kw)}")
+    # 早期信号：新注册域名扎堆、Hugging Face 新模型、itch.io 新网页游戏（还没等 Google 趋势确认）
+    early = early_signals(state)
+    if early:
+        blocks.append("—— 早期信号（还没经过 Google 趋势确认）——")
+        blocks += early
     tail = "能不能做，看 20 分钟后的 Claude 判断报告（北京时间 1:20、7:20、13:20、19:20）。"
     # 全部列出；飞书单条消息有大小限制，太长就拆成几条
     msgs, cur = [], head
@@ -114,3 +119,35 @@ def digest(state, now=None):
         for kw, _ in items:
             sent[kw] = today
         state["digest_slot"], state["digest_at"] = slot, now.isoformat()
+
+
+EARLY_SOURCES = ("新注册域名", "Hugging Face", "itch.io 新游戏热门")
+
+
+def early_signals(state, per_source=8):
+    """读最新一次信号源结果，挑出之前没推过的。"""
+    import json as _json
+    from .rules import OUT_DIR, filter_reason
+    path = OUT_DIR / "data" / "signals" / "latest.json"
+    if not path.exists():
+        return []
+    data = _json.loads(path.read_text(encoding="utf-8"))
+    pushed = state.setdefault("signals_pushed", {})
+    today = _dt.datetime.now(BJ).strftime("%Y-%m-%d")
+    out, count = [], {}
+    for it in data.get("items", []):
+        src = it["source"]
+        if not src.startswith(EARLY_SOURCES):
+            continue
+        key = src + "|" + it["name"]
+        if key in pushed or (it.get("keyword") and filter_reason(it["keyword"])):
+            continue
+        group = src.split(" ")[0]
+        if count.get(group, 0) >= per_source:
+            continue
+        count[group] = count.get(group, 0) + 1
+        pushed[key] = today
+        out.append(f"· [{src}] {it['name']}\n  {it.get('note', '')}\n  {it.get('url', '')}")
+    cutoff = (_dt.datetime.now(BJ) - _dt.timedelta(days=30)).strftime("%Y-%m-%d")
+    state["signals_pushed"] = {k: v for k, v in pushed.items() if v >= cutoff}
+    return out
