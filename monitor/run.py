@@ -228,12 +228,18 @@ class Runner:
     def queue_order(self):
         family = self.family_words()
 
+        seen = self.state.get("seen", {})
+
         def key(kv):
             kw, meta = kv
+            # 快车道：连续 2 天以上都出现在上升列表里的词，不管方向先查（例如 pokemon › pokesurvivor 连续上榜却一直排队）
+            # 只给有价值的方向（AI 视频/图片、AI 工具、工具站、小游戏）开快车道，避免新闻、体育连续上榜占位
+            days = len(seen.get(kw, {}).get("days", []))
             # 方向优先级：AI 视频/图片 > AI 工具 > 工具站 > 小游戏 > ……；同方向里，同一话题的变体靠后、层级浅和涨幅大的靠前
             pri = rules.TAG_PRIORITY.get(rules.tag(kw, meta.get("path", [])), 5)
+            lane = 0 if days >= 2 and pri <= 3 else 1
             variant = 1 if self.core_words(kw) & family else 0
-            return (pri, variant, meta.get("depth", 1), -meta.get("value", 0))
+            return (lane, -days, pri, variant, meta.get("depth", 1), -meta.get("value", 0))
         return sorted(((k, m) for k, m in self.state["pending"].items() if k not in self.skip), key=key)
 
     def review_pending(self):

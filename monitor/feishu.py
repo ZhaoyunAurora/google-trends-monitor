@@ -36,6 +36,7 @@ import datetime as _dt
 ALERT_KINDS = {"新词", "老词二次爆火", "待观察"}
 PUSH_MIN = int(os.getenv("PUSH_MIN", "250"))        # 新词 / 老词二次爆火：估算每天 ≥ 250 次才推
 PUSH_MIN_EARLY = int(os.getenv("PUSH_MIN_EARLY", "100"))  # 今天刚冒头的：≥ 100 次就推，标 🆕
+PUSH_BIG = int(os.getenv("PUSH_BIG", "1000"))  # 量很大（≥ 1000 次/天）的新词，不管方向一律推
 ALERT_TAGS = {"AI 视频/图片", "AI 工具", "工具站", "小游戏", "AI 相关（词根）",
               "AI 工具/模型/玩法", "工具站需求"}  # 后两个是旧版标签
 DIGEST_HOURS = 6
@@ -67,7 +68,8 @@ def digest(state, now=None):
     checked = [r for r in state["reviewed"].values() if r.get("reviewed_at", "") >= since]
     items = []
     for kw, r in state["reviewed"].items():
-        if kw in sent or r.get("kind") not in ALERT_KINDS or r.get("tag") not in ALERT_TAGS:
+        big = (r.get("est_daily") or 0) >= PUSH_BIG
+        if kw in sent or r.get("kind") not in ALERT_KINDS or (r.get("tag") not in ALERT_TAGS and not big):
             continue
         if r.get("status") == "已明显回落":
             continue

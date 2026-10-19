@@ -153,7 +153,8 @@ def junk_from_children(children, filter_reason):
     hits = {}
     for c in children:
         r = filter_reason(c["query"])
-        if r and r not in ("非英文", "问句长句"):
+        # 「网址导航」不算垃圾：相关词里出现 xxx.io / xxx.com，往往说明有新产品、新网站（例如 pokesurvivor）
+        if r and r not in ("非英文", "问句长句", "网址导航"):
             hits[r] = hits.get(r, 0) + 1
     if not hits:
         return None

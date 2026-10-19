@@ -102,9 +102,14 @@ AI_MEDIA = re.compile(
     r"veo|kling|seedance|sora|hailuo|pixverse|viggle|higgsfield|nano banana|midjourney|flux|seedream|"
     r"dreamina|vidu|krea|hedra|runway|pika|luma|wan|qwen image|gpt image|grok imagine|imagine|text to|image to)\b",
     re.I)
+# 攻略类意图（不做）：兑换码、wiki、tier list、攻略、mod、皮肤……
 GAME_GUIDE = re.compile(
-    r"\b(roblox|codes?|wiki|tier list|walkthrough|mods?|skins?|minecraft|fortnite|genshin|pokemon|steam|"
-    r"dlc|patch|release date|builds?|guide|map|trello|discord)\b", re.I)
+    r"\b(codes?|wiki|tier list|walkthrough|mods?|skins?|dlc|patch|release date|builds?|guide|map|trello|discord|"
+    r"cheats?|script|values?|trading)\b", re.I)
+# 游戏名 / 游戏平台：本身不代表攻略意图，从这些词根挖出来的新名字多半是新游戏
+GAME_FRANCHISE = re.compile(
+    r"\b(roblox|minecraft|fortnite|pokemon|pok[eé]|genshin|steam|nintendo|zelda|mario|sonic|"
+    r"game|games|survivor|survivors|rpg|roguelike|roguelite)\b", re.I)
 SMALL_GAME = re.compile(
     r"\b(game|games|unblocked|io|play|playable|browser|puzzle|clicker|idle|simulator|tycoon|"
     r"arcade|runner|merge|solitaire|sudoku|quiz|trivia|html5|online game|2 player)\b", re.I)
@@ -119,10 +124,13 @@ def tag(kw, path):
         return "AI 视频/图片" if AI_MEDIA.search(kw) else "AI 工具"
     if GAME_GUIDE.search(kw):
         return "游戏攻略"
-    if SMALL_GAME.search(kw):
+    if SMALL_GAME.search(kw) or GAME_FRANCHISE.search(kw):
         return "小游戏"
     if TOOL_WORDS.search(kw):
         return "工具站"
-    if AI_WORDS.search(" ".join(path or [])):
+    path_text = " ".join(path or [])
+    if AI_WORDS.search(path_text):
         return "AI 相关（词根）"
+    if GAME_FRANCHISE.search(path_text) or SMALL_GAME.search(path_text):
+        return "小游戏"  # 从游戏词根挖出来的新名字（例如 pokemon › pokesurvivor），多半是新游戏
     return "其他"
