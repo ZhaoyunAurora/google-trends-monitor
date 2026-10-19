@@ -81,7 +81,7 @@ class FakeTrends:
 
 if __name__ == "__main__":
     run.rules.load_roots = lambda: (["higgsfield", "ai video"], [])
-    run.signals.fetch_all = lambda log=print: ([
+    run.signals.fetch_all = lambda log=print, skip=(): ([
         {"source": "新注册域名", "name": "pokesurvivor", "keyword": "pokesurvivor", "url": "https://pokesurvivor.com",
          "score": 4, "note": "注册了 4 个：pokesurvivor.com、pokesurvivor.io、pokesurvivor.org、playpokesurvivor.com"},
         {"source": "Hugging Face 模型", "name": "Qwen/Qwen-Image-3", "keyword": "qwen image 3", "url": "https://hf.co",
