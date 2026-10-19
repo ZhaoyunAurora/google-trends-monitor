@@ -62,33 +62,63 @@ def _core(label):
     return core
 
 
-def nrd(day=None, min_count=3, top=80):
-    day = day or (dt.datetime.now(dt.timezone.utc).date() - dt.timedelta(days=1))
+BUILDER_TLDS = {"com", "io", "ai", "app", "org", "net", "co", "xyz", "online", "site", "pro", "gg", "me", "cc",
+                "top", "fun", "games", "game", "tv", "so", "dev", "studio", "art", "video", "tools", "space", "click",
+                "live", "world", "info", "us", "uk", "ca", "au", "de", "fr", "es", "it", "jp", "in", "lol", "wiki"}
+
+
+def _nrd_day(day):
     name = base64.b64encode(f"{day.isoformat()}.zip".encode()).decode()
     url = f"https://www.whoisds.com//whois-database/newly-registered-domains/{name}/nrd"
     r = _get(url, timeout=120)
     zf = zipfile.ZipFile(io.BytesIO(r.content))
-    text = zf.read(zf.namelist()[0]).decode("utf-8", "ignore")
-    groups = defaultdict(set)
-    for line in text.splitlines():
-        d = line.strip().lower()
-        if not d or d.count(".") > 2:
+    return zf.read(zf.namelist()[0]).decode("utf-8", "ignore").splitlines()
+
+
+def nrd(window=7, top=60):
+    """最近 window 天新注册的域名里，同一个名字被注册成多个常用后缀 / 多个写法（多半是不同的人在抢）。
+    只统计做站常用的后缀（.com .io .ai .app .org …），一个人把同一个名字买遍几十个冷门后缀的不算。"""
+    today = dt.datetime.now(dt.timezone.utc).date()
+    groups = defaultdict(lambda: {"domains": set(), "labels": set(), "days": set()})
+    got_days = []
+    for i in range(1, window + 1):
+        day = today - dt.timedelta(days=i)
+        try:
+            lines = _nrd_day(day)
+        except Exception:  # noqa: BLE001  某天的列表拿不到就跳过
             continue
-        label = d.split(".")[0]
-        if len(label) < 6 or len(label) > 24 or "-" in label and label.count("-") > 2:
-            continue
-        label = label.replace("-", "")
-        if NRD_SKIP.search(label) or label.isdigit():
-            continue
-        groups[_core(label)].add(d)
+        got_days.append(day.isoformat())
+        for line in lines:
+            d = line.strip().lower()
+            parts = d.split(".")
+            if len(parts) != 2 or parts[1] not in BUILDER_TLDS:
+                continue
+            label = parts[0]
+            if len(label) < 6 or len(label) > 24 or label.count("-") > 2 or not label.replace("-", "").isalnum():
+                continue
+            label = label.replace("-", "")
+            if NRD_SKIP.search(label) or label.isdigit():
+                continue
+            core = _core(label)
+            if len(core) < 5 or core in GENERIC_CORE:
+                continue
+            g = groups[core]
+            g["domains"].add(d)
+            g["labels"].add(label)
+            g["days"].add(day.isoformat())
     out = []
-    for core, doms in groups.items():
-        if len(doms) < min_count or len(core) < 5 or core in GENERIC_CORE:
+    for core, g in groups.items():
+        b, v = len(g["domains"]), len(g["labels"])
+        if not (b >= 3 or (v >= 2 and b >= 2)):
             continue
-        out.append({"source": "新注册域名", "name": core, "keyword": core,
-                    "url": "https://" + sorted(doms)[0], "score": len(doms),
-                    "note": f"{day.isoformat()} 注册了 {len(doms)} 个：" + "、".join(sorted(doms)[:6])})
-    out.sort(key=lambda x: -x["score"])
+        doms = sorted(g["domains"])
+        days = sorted(g["days"])
+        out.append({"source": "新注册域名", "name": core, "keyword": core, "url": "https://" + doms[0],
+                    "score": b + v, "first": days[0], "last": days[-1],
+                    "note": f"{days[0][5:]}~{days[-1][5:]} 注册了 {b} 个（{v} 种写法）：" + "、".join(doms[:6])})
+    out.sort(key=lambda x: (-x["score"], x["first"]))
+    if not got_days:
+        raise RuntimeError("新注册域名列表一天都没拿到")
     return out[:top]
 
 
@@ -188,14 +218,16 @@ def producthunt():
     return out
 
 
-SOURCES = {"nrd": nrd, "trending": trending_now, "hf": huggingface, "itch": itch,
-           "reddit": reddit, "producthunt": producthunt}
+# Reddit 拒绝 GitHub 机房的 IP（实测 0 条），先不抓
+SOURCES = {"nrd": nrd, "trending": trending_now, "hf": huggingface, "itch": itch, "producthunt": producthunt}
 
 
-def fetch_all(log=print):
+def fetch_all(log=print, skip=()):
     """抓所有来源。返回 (items, status)，status = {来源: 条数 或 错误信息}。"""
     items, status = [], {}
     for key, fn in SOURCES.items():
+        if key in skip:
+            continue
         try:
             got = fn()
             items += got

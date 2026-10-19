@@ -81,7 +81,7 @@ jobs:
           ROTATE_DAYS: "1"     # 所有词根每天都查一遍
           MAX_DEPTH: "4"
           DEEP_MIN: "1000"     # 第 2 层以下没有「飙升」标签时，涨幅 ≥ 1000% 才进下一层
-          SIGNAL_HOURS: "3"    # 早期信号源（新注册域名、实时热搜、Hugging Face、itch.io、Reddit、Product Hunt）每 3 小时抓一次
+          SIGNAL_HOURS: "3"    # 早期信号源（实时热搜、Hugging Face、itch.io、Product Hunt 每 3 小时；新注册域名每天一次，看最近 7 天）
           REF_DAILY: "5000"    # GPTs 每天约 5000 次搜索，用来估算日搜索量
           MONTH_MIN: "100"     # 7 天估算日搜 ≥ 100 次（或在涨）才看 1 个月
           PUSH_MIN: "250"      # 估算日搜 ≥ 250 次的新词才推送飞书

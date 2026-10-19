@@ -163,7 +163,15 @@ class Runner:
         last = self.state.get("signals_at", "")
         if last and now() - dt.datetime.fromisoformat(last) < dt.timedelta(hours=self.signal_hours):
             return
-        items, status = signals.fetch_all(log=log)
+        # 新注册域名列表一天只更新一次：当天已经抓过就沿用上次的结果
+        skip = ("nrd",) if self.state.get("nrd_day") == today() else ()
+        items, status = signals.fetch_all(log=log, skip=skip)
+        prev = load_json(DATA / "signals" / "latest.json", {"items": []})
+        if skip:
+            items += [i for i in prev.get("items", []) if i["source"] == "新注册域名"]
+            status["nrd"] = "沿用今天早些时候的结果"
+        elif isinstance(status.get("nrd"), int):
+            self.state["nrd_day"] = today()
         self.state["signals_at"] = now().isoformat()
         stamp = now().strftime("%Y-%m-%d-%H")
         save_json(DATA / "signals" / f"{stamp}.json", {"at": now().isoformat(), "status": status, "items": items})
