@@ -46,7 +46,8 @@ NRD_SKIP = re.compile(r"(casino|bet|slot|loan|porn|sex|xxx|cbd|vape|crypto|token
 
 GENERIC_CORE = set("""video image photo music games online studio global group service services digital media
     design market capital health energy travel global world consulting solutions systems network academy
-    agency homes realty beauty fashion""".split())
+    agency homes realty beauty fashion agent agents contact traffic daily study lance creator creators
+    store official network coach learn english money market trading invest crypto support""".split())
 
 
 def _core(label):

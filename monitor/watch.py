@@ -45,7 +45,10 @@ def slug_keyword(url):
 
 
 def _locs(xml_bytes):
-    root = ET.fromstring(xml_bytes)
+    if xml_bytes[:2] == b"\x1f\x8b":  # .xml.gz
+        import gzip
+        xml_bytes = gzip.decompress(xml_bytes)
+    root = ET.fromstring(xml_bytes.strip())
     tag = root.tag.split("}")[-1]
     locs = [e.text.strip() for e in root.iter() if e.tag.endswith("loc") and e.text]
     return tag, locs
@@ -58,7 +61,12 @@ def from_sitemap(urls, pattern, max_children=30):
         if u in seen:
             continue
         seen.add(u)
-        tag, locs = _locs(_get(u, timeout=60).content)
+        try:
+            tag, locs = _locs(_get(u, timeout=60).content)
+        except Exception:  # noqa: BLE001  某个子站点地图坏了就跳过；入口坏了才算失败
+            if u in urls:
+                raise
+            continue
         if tag == "sitemapindex":
             todo += locs
         else:
@@ -92,7 +100,7 @@ def check_all(log=print):
     today = dt.datetime.now(dt.timezone.utc).date().isoformat()
     WATCH_DIR.mkdir(parents=True, exist_ok=True)
     for site in load_sites():
-        path = WATCH_DIR / f"{re.sub(r'[^a-zA-Z0-9._-]', '_', site['name'])}.json"
+        path = WATCH_DIR / f"{re.sub(r'[\\/:*?\"<>| ]', '_', site['name'])}.json"
         known = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
         try:
             if site["mode"] == "crawl":
@@ -104,7 +112,8 @@ def check_all(log=print):
             log(f"[竞品] {site['name']}: {status[site['name']]}")
             continue
         new = sorted(u for u in found if u not in known)
-        baseline = not known
+        # 一次冒出很多「新页面」多半是站点改版 / 换了地址格式，不是新词，当作重新记基线
+        baseline = not known or len(new) > 100
         for u in new:
             known[u] = today
         path.write_text(json.dumps(known, ensure_ascii=False, indent=0), encoding="utf-8")
