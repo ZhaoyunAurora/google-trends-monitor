@@ -235,4 +235,12 @@ def fetch_all(log=print, skip=()):
         except Exception as e:  # noqa: BLE001
             status[key] = f"失败：{type(e).__name__}"
         log(f"[信号] {key}: {status[key]}")
+    if "watch" not in skip:
+        from .watch import check_all  # 放在这里避免循环导入
+        try:
+            got, st = check_all(log=log)
+            items += got
+            status["watch"] = st
+        except Exception as e:  # noqa: BLE001
+            status["watch"] = f"失败：{type(e).__name__}"
     return items, status

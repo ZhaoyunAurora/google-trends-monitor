@@ -98,7 +98,7 @@ def digest(state, now=None):
             + f"\n  来源：{' › '.join(r.get('path', []))}"
             f"\n  {trends_link(kw)}")
     # 早期信号：新注册域名扎堆、Hugging Face 新模型、itch.io 新网页游戏（还没等 Google 趋势确认）
-    early = early_signals(state)
+    early = early_signals(state)  # 竞品新页面排最前
     if early:
         blocks.append("—— 早期信号（还没经过 Google 趋势确认）——")
         blocks += early
@@ -121,7 +121,7 @@ def digest(state, now=None):
         state["digest_slot"], state["digest_at"] = slot, now.isoformat()
 
 
-EARLY_SOURCES = ("新注册域名", "Hugging Face", "itch.io 新游戏热门")
+EARLY_SOURCES = ("竞品新页面", "新注册域名", "Hugging Face", "itch.io 新游戏热门")
 
 
 def early_signals(state, per_source=8):
@@ -142,7 +142,7 @@ def early_signals(state, per_source=8):
         key = src + "|" + it["name"]
         if key in pushed or (it.get("keyword") and filter_reason(it["keyword"])):
             continue
-        group = src.split(" ")[0]
+        group = src.split(" ")[0] if not src.startswith("竞品新页面") else src
         if count.get(group, 0) >= per_source:
             continue
         count[group] = count.get(group, 0) + 1

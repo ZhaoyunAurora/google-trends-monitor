@@ -1,0 +1,17 @@
+# 竞品新页面监测：这些站一加新内页，基本就是有新词的信号。想加站就加一行。
+# 格式：名字 | 模式 | 地址（多个用英文逗号隔开）| 页面地址要匹配的正则
+#   sitemap：读站点地图（支持索引）
+#   crawl  ：列表是前端加载、站点地图里没有时用，从种子页面顺着「相关推荐」链接找新页面
+# 第一次运行只记录现有页面作为基线，之后只报告新出现的页面。
+
+# --- AI 视频 / 图片模板站（热点玩法出来，几天内就会加页面）---
+media.io 玩法页 | crawl | https://www.media.io/ai/explore/zone/bulin-47-rap-ai-trend,https://www.media.io/ai/explore/zone/hotel-lobby-ai-video-trend,https://www.media.io/ai/explore/zone/migos-ai-video-generator | ^https://www\.media\.io/ai/explore/zone/[a-z0-9-]+$
+media.io 工具页 | sitemap | https://www.media.io/sitemap.xml | ^https://www\.media\.io/
+pollo.ai | sitemap | https://pollo.ai/sitemap.xml | ^https://pollo\.ai/(?!(es|fr|de|ja|ko|pt|it|ru|zh|zh-tw|tw|id|ar|tr|vi|th|nl|pl|hi)/)
+higgsfield 特效 | sitemap | https://higgsfield.ai/effects/sitemap.xml,https://higgsfield.ai/apps/sitemap.xml,https://higgsfield.ai/mixed-media-presets/sitemap.xml,https://higgsfield.ai/motion/sitemap.xml | ^https://higgsfield\.ai/
+dreamina | sitemap | https://dreamina.capcut.com/sitemap.xml | ^https://dreamina\.capcut\.com/(ai-video|ai-image|ai-tool|tools)/
+vidnoz | sitemap | https://www.vidnoz.com/sitemap-index.xml | ^https://www\.vidnoz\.com/(?!(es|fr|de|ja|ko|pt|it|ru|zh|tw|id|ar|tr|vi|th|nl|pl)/)
+
+# --- 网页小游戏站（新游戏上架）---
+crazygames | sitemap | https://www.crazygames.com/sitemap-index.xml | ^https://www\.crazygames\.com/game/
+poki | sitemap | https://poki.com/en/sitemaps/index.xml | ^https://poki\.com/en/g/
