@@ -10,6 +10,7 @@ media.io 工具页 | sitemap | https://www.media.io/sitemap.xml | ^https://www\.
 pollo.ai | sitemap | https://pollo.ai/sitemap.xml | ^https://pollo\.ai/(?!(es|fr|de|ja|ko|pt|it|ru|zh|zh-tw|tw|id|ar|tr|vi|th|nl|pl|hi)/)
 higgsfield 特效 | sitemap | https://higgsfield.ai/effects/sitemap.xml,https://higgsfield.ai/apps/sitemap.xml,https://higgsfield.ai/mixed-media-presets/sitemap.xml,https://higgsfield.ai/motion/sitemap.xml | ^https://higgsfield\.ai/
 dreamina | sitemap | https://dreamina.capcut.com/sitemap.xml | ^https://dreamina\.capcut\.com/(ai-video|ai-image|ai-tool|tools)/
+supermaker.ai | sitemap | https://supermaker.ai/sitemap.xml | ^https://(www\.)?supermaker\.ai/(?![a-z]{2}(-[a-z]{2})?/)
 vidnoz | sitemap | https://www.vidnoz.com/sitemap-index.xml | ^https://www\.vidnoz\.com/(?!(es|fr|de|ja|ko|pt|it|ru|zh|tw|id|ar|tr|vi|th|nl|pl)/)
 
 # --- 网页小游戏站（新游戏上架）---

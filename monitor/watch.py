@@ -54,7 +54,22 @@ def _locs(xml_bytes):
     return tag, locs
 
 
+def _robots_sitemaps(url):
+    """入口站点地图读不到时，去 robots.txt 里找它声明的站点地图。"""
+    base = re.match(r"https?://[^/]+", url).group(0)
+    txt = _get(base + "/robots.txt", timeout=30).text
+    return [ln.split(":", 1)[1].strip() for ln in txt.splitlines() if ln.lower().startswith("sitemap:")]
+
+
 def from_sitemap(urls, pattern, max_children=30):
+    ok = []
+    for u in urls:
+        try:
+            _locs(_get(u, timeout=60).content)
+            ok.append(u)
+        except Exception:  # noqa: BLE001
+            ok += _robots_sitemaps(u)
+    urls = ok
     found, todo, seen = set(), list(urls), set()
     while todo and len(seen) < max_children + len(urls):
         u = todo.pop(0)
