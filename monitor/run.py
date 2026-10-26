@@ -169,7 +169,9 @@ class Runner:
         prev = load_json(DATA / "signals" / "latest.json", {"items": []})
         if skip:
             items += [i for i in prev.get("items", []) if i["source"] == "新注册域名"]
-            status["nrd"] = "沿用今天早些时候的结果"
+            last_reg = max((i.get("last", "") for i in items if i["source"] == "新注册域名"), default="")
+            status["nrd"] = (f"正常：新注册域名每天只更新一次，今天（UTC {today()}）已经抓过，"
+                             f"最新一批是 {last_reg} 注册的；明天 UTC 0 点后再刷新")
         elif isinstance(status.get("nrd"), int):
             self.state["nrd_day"] = today()
         self.state["signals_at"] = now().isoformat()
