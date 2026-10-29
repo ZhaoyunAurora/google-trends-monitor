@@ -157,6 +157,17 @@ def poll(state, log=print):
             except Exception:  # noqa: BLE001
                 continue
             reply = handle(text, today)
+            if not reply and AT.sub(" ", text).strip():
+                # 不是固定格式的话（大多数时候你会直接说人话）：存进 feedback_inbox.md，交给 Claude 下一份报告理解成规则
+                stamp = dt.datetime.fromtimestamp(int(m.get("create_time", "0")) // 1000,
+                                                  dt.timezone(dt.timedelta(hours=8))).strftime("%m-%d %H:%M")
+                body = AT.sub(" ", text).strip().replace("\n", " / ")
+                p = rules.OUT_DIR / "feedback_inbox.md"
+                old = p.read_text(encoding="utf-8") if p.exists() else (
+                    "# 飞书里收到的反馈（原话），Claude 每份报告会把 [ ] 的整理成 feedback.md 的规则，然后改成 [x]\n\n")
+                p.write_text(old + f"- [ ] {stamp} | {body}\n", encoding="utf-8")
+                reply = ("收到 👌 已转给 Claude：下一份判断报告（北京时间 1:20 / 7:20 / 13:20 / 19:20）"
+                         "会把这条理解成筛词规则，并在报告开头告诉你它是怎么理解的。理解错了直接再发一条纠正就行。")
             if reply:
                 _reply(token, mid, reply)
                 n += 1
