@@ -219,8 +219,124 @@ def producthunt():
     return out
 
 
+# ---------------------------------------------------------------- TikTok 创意中心（试验）
+# 热门标签 / 热门音乐榜。页面是前端加载的，数据接口要签名，所以：
+#   先直接请求接口（不签名，可能被拒）；拿不到就用无头浏览器打开页面，截下页面自己发出的接口结果。
+TT_PAGES = {
+    "标签": "https://ads.tiktok.com/business/creativecenter/inspiration/popular/hashtag/pc/en?period=7&countryCode={c}",
+    "音乐": "https://ads.tiktok.com/business/creativecenter/inspiration/popular/music/pc/en?period=7&countryCode={c}",
+}
+TT_API = ("https://ads.tiktok.com/creative_radar_api/v1/popular_trend/hashtag/list"
+          "?page=1&limit=50&period=7&country_code={c}&sort_by=popular")
+TT_COUNTRIES = ("US", "GB")
+
+
+def _tt_direct(country):
+    r = S.get(TT_API.format(c=country), timeout=30,
+              headers={"Referer": TT_PAGES["标签"].format(c=country), "Accept": "application/json"})
+    r.raise_for_status()
+    js = r.json()
+    if js.get("code") != 0:
+        raise RuntimeError(f"接口返回 code={js.get('code')} {str(js.get('msg', ''))[:60]}")
+    return {"标签": js["data"]}
+
+
+def _ensure_playwright():
+    try:
+        import playwright  # noqa: F401
+    except ImportError:
+        import subprocess
+        import sys
+        subprocess.run([sys.executable, "-m", "pip", "install", "-q", "playwright"], check=True, timeout=300)
+    import subprocess
+    import sys
+    # 浏览器装过会直接跳过；GitHub 的 ubuntu 机器需要 --with-deps 装系统库
+    subprocess.run([sys.executable, "-m", "playwright", "install", "--with-deps", "chromium"],
+                   check=True, timeout=600, capture_output=True)
+
+
+def _tt_browser(country):
+    _ensure_playwright()
+    from playwright.sync_api import sync_playwright
+    got = {}
+    with sync_playwright() as p:
+        b = p.chromium.launch()
+        pg = b.new_page(user_agent=UA, locale="en-US")
+        for kind, url in TT_PAGES.items():
+            def on_resp(resp, kind=kind):
+                if "creative_radar_api" in resp.url and "popular_trend" in resp.url and kind not in got:
+                    try:
+                        js = resp.json()
+                        if js.get("code") == 0 and js.get("data"):
+                            got[kind] = js["data"]
+                    except Exception:  # noqa: BLE001
+                        pass
+            pg.on("response", on_resp)
+            try:
+                pg.goto(url.format(c=country), wait_until="networkidle", timeout=60000)
+                pg.wait_for_timeout(3000)
+            except Exception:  # noqa: BLE001
+                pass
+            pg.remove_listener("response", on_resp)
+        b.close()
+    if not got:
+        raise RuntimeError("浏览器打开了页面，但没截到榜单数据（可能被要求登录 / 地区限制）")
+    return got
+
+
+def _tt_rows(data):
+    for key in ("list", "sound_list", "songs", "music_list"):
+        if isinstance(data.get(key), list):
+            return data[key]
+    return []
+
+
+def tiktok():
+    out, errors, how = [], [], ""
+    for c in TT_COUNTRIES:
+        try:
+            try:
+                got, how = _tt_direct(c), "直接请求"
+            except Exception as e:  # noqa: BLE001
+                errors.append(f"{c} 直接请求：{type(e).__name__} {str(e)[:80]}")
+                got, how = _tt_browser(c), "无头浏览器"
+        except Exception as e:  # noqa: BLE001
+            errors.append(f"{c} 浏览器：{type(e).__name__} {str(e)[:80]}")
+            continue
+        for kind, data in got.items():
+            for row in _tt_rows(data)[:50]:
+                rank = row.get("rank", "")
+                diff_type = row.get("rank_diff_type")
+                is_new = diff_type == 4 or str(row.get("is_new", "")).lower() == "true"
+                if kind == "标签":
+                    name = row.get("hashtag_name") or ""
+                    if not name:
+                        continue
+                    views = row.get("video_views") or 0
+                    note = (f"{c} 7 天热门标签第 {rank} 名" + ("（新上榜）" if is_new else "")
+                            + f"，{row.get('publish_cnt', 0)} 个视频，{views:,} 次播放")
+                    out.append({"source": f"TikTok 热门标签 {c}", "name": "#" + name,
+                                # 只把新上榜的标签拿去 Google 趋势验证，老牌大标签（fyp 之类）只展示
+                                "keyword": _clean(name) if is_new else "",
+                                "url": f"https://www.tiktok.com/tag/{name}", "score": rank, "note": note})
+                else:
+                    title = row.get("title") or row.get("song_name") or ""
+                    if not title:
+                        continue
+                    author = row.get("author") or row.get("artist") or ""
+                    out.append({"source": f"TikTok 热门音乐 {c}", "name": f"{title} — {author}".strip(" —"),
+                                "keyword": "", "url": row.get("link") or TT_PAGES["音乐"].format(c=c),
+                                "score": rank,
+                                "note": f"{c} 7 天热门音乐第 {rank} 名" + ("（新上榜）" if is_new else "")})
+    if not out:
+        raise RuntimeError("；".join(errors)[:300] or "没拿到数据")
+    tiktok.last_note = f"{how}拿到" + (f"；部分失败：{'；'.join(errors)[:200]}" if errors else "")
+    return out
+
+
 # Reddit 拒绝 GitHub 机房的 IP（实测 0 条），先不抓
-SOURCES = {"nrd": nrd, "trending": trending_now, "hf": huggingface, "itch": itch, "producthunt": producthunt}
+SOURCES = {"nrd": nrd, "trending": trending_now, "hf": huggingface, "itch": itch, "producthunt": producthunt,
+           "tiktok": tiktok}
 
 
 def fetch_all(log=print, skip=()):
@@ -234,7 +350,10 @@ def fetch_all(log=print, skip=()):
             items += got
             status[key] = len(got)
         except Exception as e:  # noqa: BLE001
-            status[key] = f"失败：{type(e).__name__}"
+            status[key] = f"失败：{type(e).__name__}" + (f" {str(e)[:300]}" if key == "tiktok" else "")
+        if key == "tiktok" and isinstance(status[key], int):
+            status[key] = f"{status[key]} 条（{getattr(fn, 'last_note', '')}）"
+        # 公开日志里只打条数 / 状态，不打关键词
         log(f"[信号] {key}: {status[key]}")
     if "watch" not in skip:
         from .watch import check_all  # 放在这里避免循环导入

@@ -121,7 +121,7 @@ def digest(state, now=None):
         state["digest_slot"], state["digest_at"] = slot, now.isoformat()
 
 
-EARLY_SOURCES = ("竞品新页面", "新注册域名", "Hugging Face", "itch.io 新游戏热门")
+EARLY_SOURCES = ("竞品新页面", "新注册域名", "Hugging Face", "itch.io 新游戏热门", "TikTok")
 
 
 def early_signals(state, per_source=8):
@@ -139,6 +139,8 @@ def early_signals(state, per_source=8):
         src = it["source"]
         if not src.startswith(EARLY_SOURCES):
             continue
+        if src.startswith("TikTok") and "新上榜" not in it.get("note", ""):
+            continue  # TikTok 榜上老牌大标签（fyp 之类）不推，只推新上榜的
         key = src + "|" + it["name"]
         if key in pushed or (it.get("keyword") and filter_reason(it["keyword"])):
             continue
