@@ -21,6 +21,52 @@ def _lines(name):
     return out
 
 
+FEEDBACK_LINE = re.compile(r"^(root\+|root-|\+|-)\s*([\x20-\x7e]+?)\s*(?:[|｜#:：]|[^\x00-\x7f]|$)(.*)$", re.I)
+_FEEDBACK = None
+
+
+def load_feedback():
+    """读私有仓库根目录的 feedback.md（你在 GitHub 网页 / 手机上随手改）。每行一条：
+      + 关键词  备注     这个词做了 / 想要 → 它和它的来源词变成词根，同一条链路优先查，Claude 同类放宽
+      - 关键词  备注     不要这个词 / 这一类 → 以后直接过滤，Claude 同类归进「不做」
+      root+ 词根          加词根
+      root- 词根          删词根
+    关键词写英文，后面跟中文备注即可（也可以用 | 隔开）。"""
+    global _FEEDBACK
+    if _FEEDBACK is not None:
+        return _FEEDBACK
+    fb = {"like": {}, "dislike": {}, "root_add": [], "root_del": []}
+    p = OUT_DIR / "feedback.md"
+    if p.exists():
+        for line in p.read_text(encoding="utf-8").splitlines():
+            line = line.strip().lstrip("*").strip()
+            if line.startswith("```"):
+                continue
+            m = FEEDBACK_LINE.match(line)
+            if not m:
+                continue
+            op, kw, note = m.group(1).lower(), m.group(2).strip().lower(), m.group(3).strip()
+            if not kw:
+                continue
+            if op == "+":
+                fb["like"][kw] = note
+            elif op == "-":
+                fb["dislike"][kw] = note
+            elif op == "root+":
+                fb["root_add"].append(kw)
+            else:
+                fb["root_del"].append(kw)
+    _FEEDBACK = fb
+    return fb
+
+
+def disliked(kw):
+    for d in load_feedback()["dislike"]:
+        if kw == d or re.search(r"(^|\s)" + re.escape(d) + r"($|\s)", kw):
+            return d
+    return None
+
+
 def load_roots():
     """roots.txt 里 [daily] 段每次都查，[rotate] 段轮换查。返回 (daily, rotate)。"""
     daily, rotate, cur = [], [], None
@@ -34,7 +80,10 @@ def load_roots():
             continue
         seen.add(kw)
         (daily if cur == "daily" else rotate).append(kw)
-    return daily, rotate
+    fb = load_feedback()
+    rotate += [r for r in fb["root_add"] if r not in seen]
+    drop = set(fb["root_del"])
+    return [r for r in daily if r not in drop], [r for r in rotate if r not in drop]
 
 
 def load_filters():
@@ -60,8 +109,10 @@ def filter_reason(kw):
     if ALLOW is None:
         ALLOW = {x.lower() for x in _lines("allow.txt")}
         FILTERS = load_filters()
-    if kw in ALLOW:
+    if kw in ALLOW or kw in load_feedback()["like"]:
         return None
+    if disliked(kw):
+        return "你反馈过不要"
     if any(ord(c) > 0x24F for c in kw):
         return "非英文"
     if sum(1 for c in kw if ord(c) > 127) >= 2:

@@ -96,6 +96,8 @@ class Runner:
             kw = it["query"]
             if kw == parent or kw in self.root_set or kw in path:
                 continue
+            if path and path[0].startswith("实时热搜") and not self.useful_tag(kw, path + [parent]):
+                continue  # 新闻热搜往下挖出来的词，只要有价值方向的
             reason = rules.filter_reason(kw)
             if reason:
                 self.day["filtered"][kw] = reason
@@ -187,6 +189,9 @@ class Runner:
             seen[kw] = today()
             if rules.filter_reason(kw) or self.fresh(kw) or kw in self.state["pending"]:
                 continue
+            # 实时热搜 95% 是新闻、体育、人名：只有词面像 AI / 工具 / 小游戏的才拿去验证，其他只展示
+            if it["source"].startswith("实时热搜") and not self.useful_tag(kw, [it["source"]]):
+                continue
             # 信号源来的词：放到第 1 层，走快车道去 Google 趋势验证，同样会往下挖它的相关词
             self.state["pending"][kw] = {"roots": [it["source"]], "value": 99999, "path": [it["source"]],
                                          "depth": 1, "added": today(), "signal": it["source"]}
@@ -194,17 +199,81 @@ class Runner:
         log(f"[信号] 新进队列 {queued} 个词")
 
     # ---------- 阶段 1：查词根 ----------
+    def learn_roots(self):
+        """你反馈「+」的词：它自己和它的来源词（上一层）自动变成轮换词根，保留 30 天。
+        这样新模型名、新玩法会自己长进词根表，能更早看到它的变体（pokesurvivor → pokebonk）。"""
+        learned = self.state.setdefault("learned_roots", {})
+        sources = ("实时热搜", "新注册域名", "竞品新页面", "Hugging Face", "itch.io", "TikTok", "Product Hunt")
+        for kw in rules.load_feedback()["like"]:
+            path = (self.state["reviewed"].get(kw) or {}).get("path", [])
+            for r in [kw] + path[-1:]:
+                if r and not r.startswith(sources) and r not in learned:
+                    learned[r] = today()
+        cut = (now().date() - dt.timedelta(days=30)).isoformat()
+        self.state["learned_roots"] = {k: v for k, v in learned.items() if v >= cut}
+        return list(self.state["learned_roots"])
+
+    def root_stats(self, days=30):
+        """每个词根最近 30 天挖出了多少词、其中多少是有效的（新词 / 老词二次爆火 / 待观察）。"""
+        cut = (now() - dt.timedelta(days=days)).isoformat()
+        stats = {}
+        for kw, v in self.state["reviewed"].items():
+            if v.get("reviewed_at", "") < cut or not v.get("path"):
+                continue
+            s = stats.setdefault(v["path"][0], {"total": 0, "good": 0, "good_ai": 0})
+            s["total"] += 1
+            if v.get("kind") in ("新词", "老词二次爆火", "待观察"):
+                s["good"] += 1
+                if rules.TAG_PRIORITY.get(v.get("tag"), 5) <= 4:  # 含「AI 相关（词根）」
+                    s["good_ai"] += 1
+        return stats
+
     def pick_roots(self):
         daily, rotate = rules.load_roots()
+        drop = set(rules.load_feedback()["root_del"])
+        rotate += [r for r in self.learn_roots() if r not in rotate and r not in daily and r not in drop]
         self.root_set = set(daily) | set(rotate)
         self.root_words = {w for r in self.root_set for w in r.split()}
         last = self.state["roots"]
+        since = self.state.setdefault("root_since", {})
+        if not since:  # 第一次：用已有复核记录里最早的日期补上，避免要再等 14 天
+            for v in self.state["reviewed"].values():
+                r0 = (v.get("path") or [""])[0]
+                d = v.get("reviewed_at", "")[:10]
+                if r0 and d and (r0 not in since or d < since[r0]):
+                    since[r0] = d
+        for r in self.root_set:
+            since.setdefault(r, today())
+        stats = self.root_stats()
+        old = (now().date() - dt.timedelta(days=14)).isoformat()
+        # 降频：查了 14 天以上、一个有价值方向的有效词都没挖出来的轮换词根，改成每 7 天查一次（不删，防止哪天突然起来）
+        self.slow_roots = {r for r in rotate if since[r] <= old and stats.get(r, {}).get("good_ai", 0) == 0}
         todo = [r for r in daily if not last.get(r, "").startswith(today())]
-        # 轮换词根每隔 ROTATE_DAYS 天查一次，把请求省给往下挖
         cutoff = (now() - dt.timedelta(days=self.rotate_days)).isoformat()
-        rotate_sorted = sorted(rotate, key=lambda r: last.get(r, ""))
-        todo += [r for r in rotate_sorted if last.get(r, "") < cutoff][: self.rotate_n]
+        slow_cut = (now() - dt.timedelta(days=7)).isoformat()
+        # 轮换词根：产出高的先查
+        rotate_sorted = sorted(rotate, key=lambda r: (last.get(r, "")[:10], -stats.get(r, {}).get("good_ai", 0)))
+        todo += [r for r in rotate_sorted
+                 if last.get(r, "") < (slow_cut if r in self.slow_roots else cutoff)][: self.rotate_n]
         return todo
+
+    def save_root_stats(self):
+        """写 data/root_stats.json，给 Claude 每周复盘用。"""
+        if not hasattr(self, "slow_roots"):
+            return
+        stats = self.root_stats()
+        learned = self.state.get("learned_roots", {})
+        rows = []
+        for r in sorted(self.root_set):
+            s = stats.get(r, {"total": 0, "good": 0, "good_ai": 0})
+            rows.append({"root": r, **s, "since": self.state["root_since"].get(r),
+                         "last_scan": self.state["roots"].get(r, "")[:16],
+                         "status": "降频（每 7 天）" if r in self.slow_roots else
+                                   ("反馈学到的" if r in learned else "正常")})
+        for src in sorted(k for k in stats if k not in self.root_set):  # 信号源也统计
+            rows.append({"root": src, **stats[src], "status": "信号源"})
+        rows.sort(key=lambda x: (-x["good_ai"], -x["good"]))
+        save_json(DATA / "root_stats.json", {"at": now().isoformat(), "window_days": 30, "rows": rows})
 
     def scan_roots(self, budget_until):
         for root in self.pick_roots():
@@ -265,7 +334,7 @@ class Runner:
 
     def queue_order(self):
         family = self.family_words()
-
+        liked = set(rules.load_feedback()["like"]) | set(self.state.get("learned_roots", {}))
         seen = self.state.get("seen", {})
 
         def key(kv):
@@ -275,7 +344,9 @@ class Runner:
             days = len(seen.get(kw, {}).get("days", []))
             # 方向优先级：AI 视频/图片 > AI 工具 > 工具站 > 小游戏 > ……；同方向里，同一话题的变体靠后、层级浅和涨幅大的靠前
             pri = rules.TAG_PRIORITY.get(rules.tag(kw, meta.get("path", [])), 5)
-            lane = 0 if (days >= 2 and pri <= 3) or meta.get("signal") else 1
+            # 你反馈「+」过的词所在链路（同一个来源词挖出来的兄弟词、子词）也走快车道
+            liked_chain = bool(liked & set(meta.get("path", [])))
+            lane = 0 if (days >= 2 and pri <= 3) or meta.get("signal") or liked_chain else 1
             variant = 1 if self.core_words(kw) & family else 0
             return (lane, -days, pri, variant, meta.get("depth", 1), -meta.get("value", 0))
         return sorted(((k, m) for k, m in self.state["pending"].items() if k not in self.skip), key=key)
@@ -353,6 +424,10 @@ class Runner:
             save_json(self.state_path, self.state)
             save_json(self.day_path, self.day)
             report.build(self.day, self.state)
+            try:
+                self.save_root_stats()
+            except Exception as e:  # noqa: BLE001
+                log(f"[词根统计] 出错：{type(e).__name__}")
         kinds = {}
         for r in self.state["reviewed"].values():
             kinds[r.get("kind")] = kinds.get(r.get("kind"), 0) + 1
@@ -370,6 +445,14 @@ class Runner:
         old = (now().date() - dt.timedelta(days=7)).isoformat()
         self.state["pending"] = {k: m for k, m in self.state["pending"].items()
                                  if m.get("added", today()) >= old}
+        # 实时热搜链路上的新闻 / 体育 / 人名词清出队列（以前进去的也清掉），把查询量留给有价值的方向
+        self.state["pending"] = {k: m for k, m in self.state["pending"].items()
+                                 if not (m.get("path") or [""])[0].startswith("实时热搜")
+                                 or self.useful_tag(k, m.get("path", []))}
+
+    @staticmethod
+    def useful_tag(kw, path):
+        return rules.TAG_PRIORITY.get(rules.tag(kw, path), 5) <= 3
         seen_cut = (now().date() - dt.timedelta(days=30)).isoformat()
         self.state["seen"] = {k: t for k, t in self.state.get("seen", {}).items()
                               if t["days"] and t["days"][-1] >= seen_cut}
