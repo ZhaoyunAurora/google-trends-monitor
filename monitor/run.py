@@ -23,7 +23,7 @@ import json
 import os
 import time
 
-from . import classify, feishu, report, rules, signals
+from . import feishu_inbox, classify, feishu, report, rules, signals
 from .trends import RateLimited, Trends
 
 DATA = rules.OUT_DIR / "data"
@@ -402,6 +402,10 @@ class Runner:
         start = time.time()
         stopped = ""
         try:
+            try:
+                feishu_inbox.poll(self.state, log=log)  # 先读飞书群里的反馈，本轮马上生效
+            except Exception as e:  # noqa: BLE001
+                log(f"[飞书反馈] 出错：{str(e)[:120]}")
             try:
                 self.refresh_signals()
             except Exception as e:  # noqa: BLE001  信号源出错不影响主流程

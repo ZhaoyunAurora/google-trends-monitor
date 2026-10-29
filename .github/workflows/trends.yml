@@ -71,6 +71,9 @@ jobs:
         env:
           FEISHU_WEBHOOK: ${{ secrets.FEISHU_WEBHOOK }}
           FEISHU_SECRET: ${{ secrets.FEISHU_SECRET }}
+          FEISHU_APP_ID: ${{ secrets.FEISHU_APP_ID }}
+          FEISHU_APP_SECRET: ${{ secrets.FEISHU_APP_SECRET }}
+          FEISHU_CHAT_ID: ${{ secrets.FEISHU_CHAT_ID }}
       - name: 抓取并复核
         id: scrape
         if: steps.check.outputs.ok == 'true' && github.event.inputs.test_feishu != 'true'
@@ -92,13 +95,16 @@ jobs:
           ROOT_SHARE: "0.35"
           FEISHU_WEBHOOK: ${{ secrets.FEISHU_WEBHOOK }}
           FEISHU_SECRET: ${{ secrets.FEISHU_SECRET }}
+          FEISHU_APP_ID: ${{ secrets.FEISHU_APP_ID }}
+          FEISHU_APP_SECRET: ${{ secrets.FEISHU_APP_SECRET }}
+          FEISHU_CHAT_ID: ${{ secrets.FEISHU_CHAT_ID }}
       - name: 结果提交到私有仓库
         if: always() && steps.check.outputs.ok == 'true' && github.event.inputs.test_feishu != 'true'
         working-directory: store
         run: |
           git config user.name "trends-bot"
           git config user.email "trends-bot@users.noreply.github.com"
-          git add data reports 2>/dev/null || true
+          git add data reports feedback.md 2>/dev/null || true
           git diff --cached --quiet && exit 0
           git commit -q -m "data: $(date -u +%F-%H%M)"
           for i in 1 2 3; do git pull -q --rebase && git push -q && break; sleep 5; done

@@ -21,7 +21,7 @@ def _lines(name):
     return out
 
 
-FEEDBACK_LINE = re.compile(r"^(root\+|root-|\+|-)\s*([\x20-\x7e]+?)\s*(?:[|｜#:：]|[^\x00-\x7f]|$)(.*)$", re.I)
+FEEDBACK_LINE = re.compile(r"^(root\+|root-|\+|-)\s*([\x20-\x7e]+?)\s*(?:[|｜#:：]|(?=[^\x00-\x7f])|$)(.*)$", re.I)
 _FEEDBACK = None
 
 
