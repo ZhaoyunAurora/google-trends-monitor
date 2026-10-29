@@ -335,8 +335,9 @@ def tiktok():
 
 
 # Reddit 拒绝 GitHub 机房的 IP（实测 0 条），先不抓
-SOURCES = {"nrd": nrd, "trending": trending_now, "hf": huggingface, "itch": itch, "producthunt": producthunt,
-           "tiktok": tiktok}
+# TikTok 创意中心：2026-10-29 实测 GitHub 上接口返回 40101 no permission，无头浏览器也拿不到榜单，先停用
+#（每次失败还要白装 2 分钟浏览器）。代码保留，以后换成付费接口或你自己的 Chrome 再接上。
+SOURCES = {"nrd": nrd, "trending": trending_now, "hf": huggingface, "itch": itch, "producthunt": producthunt}
 
 
 def fetch_all(log=print, skip=()):
