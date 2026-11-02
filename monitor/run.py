@@ -23,7 +23,7 @@ import json
 import os
 import time
 
-from . import feishu_inbox, classify, feishu, report, rules, signals
+from . import adhoc, feishu_inbox, classify, feishu, report, rules, signals
 from .trends import RateLimited, Trends
 
 DATA = rules.OUT_DIR / "data"
@@ -410,6 +410,12 @@ class Runner:
                 self.refresh_signals()
             except Exception as e:  # noqa: BLE001  信号源出错不影响主流程
                 log(f"[信号] 出错：{type(e).__name__}")
+            try:  # 复盘用的临时查曲线（adhoc/keywords.txt），每轮最多花 3 分钟
+                adhoc.run_with(self.client, min(self.deadline, time.time() + 180), log=log)
+            except RateLimited:
+                raise
+            except Exception as e:  # noqa: BLE001
+                log(f"[复盘曲线] 出错：{type(e).__name__}")
             self.scan_roots(budget_until=start + (self.deadline - start) * self.root_share)
             self.review_pending()
         except RateLimited:
