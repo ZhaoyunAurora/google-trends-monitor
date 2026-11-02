@@ -29,7 +29,8 @@ from .trends import RateLimited, Trends
 DATA = rules.OUT_DIR / "data"
 REF = "gpts"  # 参照词，和手工对比时用的 GPTs 一致
 REF_DAILY = int(os.getenv("REF_DAILY", "5000"))  # GPTs 每天大约多少次搜索，用来估算日搜索量
-MONTH_MIN = int(os.getenv("MONTH_MIN", "100"))  # 7 天估算日搜达到多少才看 1 个月
+MONTH_MIN = int(os.getenv("MONTH_MIN", "100"))
+PLATEAU_MIN = int(os.getenv("PLATEAU_MIN", "300"))  # 「老词」日搜达到多少才回看 3 个月，判断是不是新词平台期  # 7 天估算日搜达到多少才看 1 个月
 
 
 def now():
@@ -222,7 +223,7 @@ class Runner:
                 continue
             s = stats.setdefault(v["path"][0], {"total": 0, "good": 0, "good_ai": 0})
             s["total"] += 1
-            if v.get("kind") in ("新词", "老词二次爆火", "待观察"):
+            if v.get("kind") in ("新词", "老词二次爆火", "待观察", "新词平台期"):
                 s["good"] += 1
                 if rules.TAG_PRIORITY.get(v.get("tag"), 5) <= 4:  # 含「AI 相关（词根）」
                     s["good_ai"] += 1
@@ -326,6 +327,20 @@ class Runner:
                 dates, k = classify.complete(d)
                 m = classify.classify_month(dates, k, classify.partial_tail(d))
                 res.update(m)
+                # 11-01 复盘：badtimesai / toctocai 是在热度峰值过后 3 周才上站、照样赚钱。
+                # 30 天里一直有量会被判成「老词」，但其实它 2~3 个月前才出生、现在还稳定在几百上千 —— 这种「新词平台期」仍然能做。
+                if res.get("kind") == "老词" and (res.get("est_daily") or 0) >= PLATEAU_MIN:
+                    q = self.client.timeseries([kw], "today 3-m")
+                    if q:
+                        qd, qk = classify.complete(q)
+                        lead = [v for v in qk[: len(qk) // 3]]  # 90 天里最早那 1/3（约 30 天）
+                        peak = max(qk) if qk else 0
+                        if peak and max(lead or [0]) <= peak * 0.1:
+                            born = next((dd for dd, v in zip(qd, qk) if v > peak * 0.1), None)
+                            res["kind"] = "新词平台期"
+                            res["born"] = born
+                            res["note"] = "；".join(x for x in [res.get("note"),
+                                                    f"{born} 前后才出现，现在还稳定在每天约 {res.get('est_daily')} 次"] if x)
         if "kind" not in res:
             res["kind"] = "量太小" if not ratio or (res.get("est_daily") or 0) < MONTH_MIN else "数据不足"
             if ratio == 0:

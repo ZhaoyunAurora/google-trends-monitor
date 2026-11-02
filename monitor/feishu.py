@@ -33,7 +33,7 @@ def send(text):
 # 平时只存结果，不打扰。
 import datetime as _dt
 
-ALERT_KINDS = {"新词", "老词二次爆火", "待观察"}
+ALERT_KINDS = {"新词", "老词二次爆火", "待观察", "新词平台期"}
 PUSH_MIN = int(os.getenv("PUSH_MIN", "250"))        # 新词 / 老词二次爆火：估算每天 ≥ 250 次才推
 PUSH_MIN_EARLY = int(os.getenv("PUSH_MIN_EARLY", "100"))  # 今天刚冒头的：≥ 100 次就推，标 🆕
 PUSH_BIG = int(os.getenv("PUSH_BIG", "1000"))  # 量很大（≥ 1000 次/天）的新词，不管方向一律推
