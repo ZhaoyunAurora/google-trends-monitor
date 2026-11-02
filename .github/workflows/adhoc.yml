@@ -1,0 +1,43 @@
+name: adhoc-curves
+# 临时查一批词最近 90 天的 Google 趋势曲线（复盘用）。词表在私有仓库 adhoc/keywords.txt，结果写回私有仓库 adhoc/。
+on:
+  workflow_dispatch:
+    inputs:
+      range:
+        description: "时间范围，例如 today 3-m / today 12-m"
+        default: "today 3-m"
+
+permissions:
+  contents: read
+
+env:
+  DATA_REPO: ZhaoyunAurora/google-trends-data
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.DATA_REPO }}
+          token: ${{ secrets.DATA_REPO_TOKEN }}
+          path: store
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests
+      - run: python -m monitor.adhoc
+        env:
+          OUT_DIR: store
+          QUIET: "1"
+          ADHOC_RANGE: ${{ github.event.inputs.range }}
+      - working-directory: store
+        run: |
+          git config user.name "trends-bot"
+          git config user.email "trends-bot@users.noreply.github.com"
+          git add adhoc
+          git diff --cached --quiet && exit 0
+          git commit -q -m "adhoc curves $(date -u +%F-%H%M)"
+          for i in 1 2 3; do git pull -q --rebase && git push -q && break; sleep 5; done
