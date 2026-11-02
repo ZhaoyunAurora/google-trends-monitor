@@ -18,7 +18,7 @@ from .signals import _get
 WATCH_DIR = rules.OUT_DIR / "data" / "signals" / "watch"
 STOP = set("""ai video videos image images photo generator generators maker trend trends prompt prompts template templates
     effect effects online free editor app tool tools create creator filter style the a an of to for and with
-    capcut html php en""".split())
+    capcut html php en how make what is explained guide your yours meme generate trend-explained""".split())
 
 
 def load_sites():

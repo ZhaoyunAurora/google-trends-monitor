@@ -76,7 +76,7 @@ def _nrd_day(day):
     return zf.read(zf.namelist()[0]).decode("utf-8", "ignore").splitlines()
 
 
-def nrd(window=7, top=60):
+def nrd(window=7, top=200):
     """最近 window 天新注册的域名里，同一个名字被注册成多个常用后缀 / 多个写法（多半是不同的人在抢）。
     只统计做站常用的后缀（.com .io .ai .app .org …），一个人把同一个名字买遍几十个冷门后缀的不算。"""
     today = dt.datetime.now(dt.timezone.utc).date()
@@ -114,10 +114,17 @@ def nrd(window=7, top=60):
             continue
         doms = sorted(g["domains"])
         days = sorted(g["days"])
+        # 「热点名 + ai / video」的写法扎堆（aizombie、neondanceai、badtimesai…）= AI 视频模板站在抢这个词，排最前
+        ai_labels = sum(1 for lb in g["labels"] if re.search(r"ai|video|gen|dance|trend", lb.replace(core, "", 1)))
+        hot = ai_labels >= 2 or (ai_labels >= 1 and b >= 3)
         out.append({"source": "新注册域名", "name": core, "keyword": core, "url": "https://" + doms[0],
-                    "score": b + v, "first": days[0], "last": days[-1],
-                    "note": f"{days[0][5:]}~{days[-1][5:]} 注册了 {b} 个（{v} 种写法）：" + "、".join(doms[:6])})
+                    "score": b + v + (10 if hot else 0), "first": days[0], "last": days[-1], "ai_template": hot,
+                    "note": ("【AI 模板站扎堆】" if hot else "") +
+                            f"{days[0][5:]}~{days[-1][5:]} 注册了 {b} 个（{v} 种写法）：" + "、".join(doms[:6])})
     out.sort(key=lambda x: (-x["score"], x["first"]))
+    for i, it in enumerate(out):
+        if i >= 60 and not it["ai_template"]:
+            it["keyword"] = ""  # 排在 60 名以后的普通扎堆只展示，不送去 Google 趋势验证，省查询量
     if not got_days:
         raise RuntimeError("新注册域名列表一天都没拿到")
     return out[:top]

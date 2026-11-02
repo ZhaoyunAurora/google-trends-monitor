@@ -4,6 +4,13 @@
 # 每个词根大约消耗 2 次请求。想加词根直接加一行；以 # 开头的行会被忽略。
 
 [daily]
+# 11-01 复盘加：AI 视频模板热点（歌 / 舞蹈 / 梗 + ai）常挂在这些词的上升相关词里
+dance ai
+ai dance trend
+ai pet video
+ai cat video
+ai couple video
+tiktok ai trend
 ai video
 ai image
 ai photo

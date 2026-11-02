@@ -13,6 +13,17 @@ dreamina | sitemap | https://dreamina.capcut.com/sitemap.xml | ^https://dreamina
 supermaker.ai | sitemap | https://supermaker.ai/sitemap.xml | ^https://(www\.)?supermaker\.ai/(?![a-z]{2}(-[a-z]{2})?/)
 vidnoz | sitemap | https://www.vidnoz.com/sitemap-index.xml | ^https://www\.vidnoz\.com/(?!(es|fr|de|ja|ko|pt|it|ru|zh|tw|id|ar|tr|vi|th|nl|pl)/)
 
+# --- 热点模板聚合站（11-01 复盘加入：新人万刀案例的母站 + 同类聚合站，一个热点出来几天内就加一页）---
+genjutsuai.cc 母站 | sitemap | https://genjutsuai.cc/sitemap.xml | ^https://genjutsuai\.cc/(?!(about|contact|terms|privacy|cookie|pricing|ai-video-trends)$)[a-z0-9-]+$
+新人单页站 | sitemap | https://aizombie.net/sitemap.xml,https://drakeburningbridgesai.com/sitemap.xml,https://smalltownboyai.net/sitemap.xml,https://toctocai.org/sitemap.xml,https://badtimesai.org/sitemap.xml,https://neondanceai.app/sitemap.xml | ^https://[^/]+/(?!(zh/)?(about|contact|terms|privacy|cookie|pricing)?$)[a-z0-9/-]+$
+makeviral.ai 模板 | sitemap | https://www.makeviral.ai/sitemap.xml | /templates/[a-z0-9-]+$
+remakeyourmeme 模板 | sitemap | https://remakeyourmeme.com/sitemap.xml | /templates/[a-z0-9-]+/?$
+summrs 教程 | sitemap | https://www.summrs.com/sitemap.xml | /blog/how-to-make-[a-z0-9-]+
+trendswap 教程 | sitemap | https://trendswap.app/sitemap.xml | /blog/[a-z0-9-]+
+kavel.ai 视频模板 | sitemap | https://www.kavel.ai/sitemap.xml | /video/[a-z0-9-]+$
+mitte.ai 模板 | sitemap | https://mitte.ai/sitemap.xml | /app/[a-z0-9-]+$
+animatephoto 特效 | sitemap | https://animatephoto.io/sitemap.xml | /video-effects/[a-z0-9-]+$
+
 # --- 网页小游戏站（新游戏上架）---
 crazygames | sitemap | https://www.crazygames.com/sitemap-index.xml | ^https://www\.crazygames\.com/game/
 poki | sitemap | https://poki.com/en/sitemaps/index.xml | ^https://poki\.com/en/g/

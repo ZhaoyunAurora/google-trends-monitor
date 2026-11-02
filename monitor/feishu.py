@@ -145,7 +145,9 @@ def early_signals(state, per_source=8):
         if key in pushed or (it.get("keyword") and filter_reason(it["keyword"])):
             continue
         group = src.split(" ")[0] if not src.startswith("竞品新页面") else src
-        if count.get(group, 0) >= per_source:
+        if it.get("ai_template"):
+            group = "新注册域名·AI 模板站"  # 单独一组，不和普通扎堆抢名额
+        if count.get(group, 0) >= (20 if it.get("ai_template") else per_source):
             continue
         count[group] = count.get(group, 0) + 1
         pushed[key] = today
